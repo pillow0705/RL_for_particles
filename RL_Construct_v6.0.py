@@ -73,9 +73,10 @@ class Config:
     save_interval = 5               # 每隔几轮保存一次 checkpoint
 
     # ---- 评测 ----
-    eval_episodes    = 10           # 训练结束后贪婪评测的局数
-    eval_report_file = "v6.0_eval_report.txt"   # 评测报告文件
-    eval_conf_file   = "v6.0_best_packing.conf" # 评测中 phi 最高的堆积
+    eval_episodes    = 50           # 评测局数（采样模式，多跑取统计）
+    eval_temperature = 1.0          # 评测时的采样温度（与训练一致）
+    eval_report_file = "v6.0_eval_report.txt"
+    eval_conf_file   = "v6.0_best_packing.conf"
 
 
 # =====================================================================
@@ -892,21 +893,22 @@ def train():
 # =====================================================================
 def evaluate(policy: PackingPolicy, cfg: Config):
     """
-    用贪婪策略跑 eval_episodes 局，统计评测指标并输出报告文件。
-    同时保存 phi 最高的那局堆积到 .conf 文件。
-
-    报告包含：
-      - 粒子数、体积分数 phi、平均配位数 Z、多分散性 PDI
-      - 各局明细 + 汇总统计
+    用温度采样策略跑 eval_episodes 局，统计评测指标并输出报告文件。
+    采样模式与训练一致，多局统计反映策略分布的真实水平。
     """
     device = cfg.device
     policy.eval()
+
+    # 临时替换温度为评测温度
+    orig_temp      = cfg.temperature
+    cfg.temperature = cfg.eval_temperature
     collector = DataCollector(cfg)
 
     print(f"\n{'='*60}")
-    print(f"开始评测（贪婪策略，共 {cfg.eval_episodes} 局）...")
+    print(f"开始评测（采样策略 T={cfg.eval_temperature}，共 {cfg.eval_episodes} 局）...")
 
-    trajs = collector.collect(policy, n_samples=cfg.eval_episodes, greedy=True)
+    trajs = collector.collect(policy, n_samples=cfg.eval_episodes, greedy=False)
+    cfg.temperature = orig_temp  # 恢复
 
     # ---- 对每局重放，拿到完整环境状态以计算详细指标 ----
     records   = []
