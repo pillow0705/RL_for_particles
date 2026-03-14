@@ -22,7 +22,7 @@ Iterative REINFORCE (no Critic):
 
 | File | Description |
 |---|---|
-| `RL_Construct_v6.0.py` | Main training code (current version) |
+| `RL_Construct_v7.0.py` | Main training code (current version) |
 | `RL_Construct_test5.2.py` | Previous version (PPO + PointNet) |
 
 ## Quick Start
@@ -30,28 +30,44 @@ Iterative REINFORCE (no Critic):
 ```bash
 pip install torch numba numpy
 
-# Run training (uses GPU 0 by default)
-python RL_Construct_v6.0.py
+# Run training (auto-selects GPU if available)
+python RL_Construct_v7.0.py
 
 # Specify GPU
-CUDA_VISIBLE_DEVICES=6 python RL_Construct_v6.0.py
+CUDA_VISIBLE_DEVICES=0 python RL_Construct_v7.0.py
 ```
 
-## Output Files
+## Output Structure
 
-| File | Description |
-|---|---|
-| `v6.0_train_log.csv` | Training metrics per iteration |
-| `v6.0_eval_report.txt` | Final evaluation report (phi, Z, PDI) |
-| `v6.0_best_packing.conf` | Best packing coordinates |
-| `construct_v6.0_final.pth` | Trained model weights |
+Each run automatically creates a new folder under `experiments/`:
+
+```
+experiments/
+  run_001/
+    config.json       # Full hyperparameter snapshot
+    run.log           # Complete training log (all stdout)
+    train_log.csv     # Per-iteration metrics (phi, loss, steps)
+    eval_report.txt   # Final evaluation report (phi, Z, PDI)
+    best_packing.conf # Best packing coordinates
+    construct_v7.0_iter5.pth   # Checkpoint (every save_interval)
+    construct_v7.0_final.pth   # Final model weights
+  run_002/
+    ...
+```
 
 ## Config
 
-All hyperparameters are in the `Config` class at the top of `RL_Construct_v6.0.py`.
+All hyperparameters are in the `Config` class at the top of `RL_Construct_v7.0.py`.
 
 Key parameters:
-- `target_N`: number of particles (default: 100)
+- `target_N`: number of particles (default: 50)
 - `embed_dim`: embedding dimension (default: 128)
 - `num_iterations`: training iterations (default: 20)
-- `samples_per_iter`: trajectories per iteration (default: 30)
+- `samples_per_iter`: trajectories per iteration (default: 20)
+- `num_workers`: parallel workers for data collection (default: 8)
+
+## v7.0 Changes vs v6.0
+
+- Incremental candidate set maintenance (no KDTree rebuild per step)
+- `_candidate_set` + `_triplet_set` + `_cand_to_triplets` for O(N) updates
+- Experiment folder auto-creation with config snapshot and full log
