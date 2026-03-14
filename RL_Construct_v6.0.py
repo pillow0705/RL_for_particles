@@ -320,32 +320,27 @@ class GraphEncoder(nn.Module):
         np.fill_diagonal(touch, 0)                      # 自环置 0
         return torch.from_numpy(touch)
 
-    def forward(self, pos, rad, L, device):
+    def forward(self, pos, rad, L, adj_np, device):
         """
-        pos : (N, 3) numpy
-        rad : (N,)   numpy
-        返回: (embed_dim,) tensor
+        pos    : (N, 3) numpy
+        rad    : (N,)   numpy
+        adj_np : (N, N) numpy float32，由 ConstructEnv 缓存并增量维护
+        返回   : (embed_dim,) tensor
         """
-        # 构建节点特征 [x, y, z, r]，归一化到合理范围
         node_np = np.concatenate(
             [pos / L, (rad / rad.max()).reshape(-1, 1)], axis=1
         ).astype(np.float32)                            # (N, 4)
 
         node_feat = torch.from_numpy(node_np).to(device)
-        adj       = self.build_adjacency(pos, rad, L).to(device)
+        adj       = torch.from_numpy(adj_np).to(device) # 直接用缓存，无需重建
 
-        # 节点投影
         h = self.input_proj(node_feat)                  # (N, hid)
-
-        # 消息传递
         for layer in self.gnn_layers:
-            h = layer(h, adj)                           # (N, hid)
+            h = layer(h, adj)
 
-        # 全局池化
-        h_max  = h.max(dim=0)[0]                        # (hid,)
-        h_mean = h.mean(dim=0)                          # (hid,)
-        h_glob = torch.cat([h_max, h_mean], dim=-1)    # (2*hid,)
-
+        h_max  = h.max(dim=0)[0]
+        h_mean = h.mean(dim=0)
+        h_glob = torch.cat([h_max, h_mean], dim=-1)
         return self.output_proj(h_glob)                 # (embed_dim,)
 
 
@@ -394,40 +389,31 @@ class PackingPolicy(nn.Module):
         self.graph_encoder = GraphEncoder(cfg)
         self.fusion        = FusionDecoder(cfg)
 
-    def forward(self, cand_feat, graph_pos, graph_rad, L, mask):
+    def forward(self, cand_feat, graph_pos, graph_rad, L, adj_np, mask):
         """
         单样本推理接口（采集时使用）。
-        cand_feat : (1, n_cands, 5)
-        返回      : (1, n_cands) 得分
+        adj_np : (N, N) numpy，由 ConstructEnv 缓存维护
         """
         device    = cand_feat.device
-        cand_emb  = self.cand_encoder(cand_feat)                    # (1, M, embed_dim)
-        graph_emb = self.graph_encoder(graph_pos, graph_rad, L, device).unsqueeze(0)  # (1, embed_dim)
-        scores    = self.fusion(cand_emb, graph_emb)                # (1, M)
+        cand_emb  = self.cand_encoder(cand_feat)
+        graph_emb = self.graph_encoder(graph_pos, graph_rad, L, adj_np, device).unsqueeze(0)
+        scores    = self.fusion(cand_emb, graph_emb)
         return scores.masked_fill(mask == 0, float('-inf'))
 
     def batch_forward(self, obs_batch, mask_batch, samples, device):
         """
-        批量推理接口（训练时使用），显著提升 GPU 利用率。
-
-        obs_batch  : (B, M, 5)  已在 device 上
-        mask_batch : (B, M)     已在 device 上
-        samples    : list of dict，包含 graph_pos / graph_rad / L
-        返回       : (B, M) 得分
+        批量推理接口（训练时使用）。
+        samples 中每个元素须含 graph_pos / graph_rad / L / adj_np。
         """
-        B = obs_batch.size(0)
-
-        # 左侧批量编码（一次 GPU forward）
         cand_emb = self.cand_encoder(obs_batch)                     # (B, M, embed_dim)
 
-        # 右侧图编码：各样本图大小不同，逐个编码后 stack
         graph_embs = []
         for s in samples:
-            g = self.graph_encoder(s['graph_pos'], s['graph_rad'], s['L'], device)
+            g = self.graph_encoder(s['graph_pos'], s['graph_rad'],
+                                   s['L'], s['adj_np'], device)
             graph_embs.append(g)
         graph_emb_batch = torch.stack(graph_embs)                   # (B, embed_dim)
 
-        # 融合解码（一次 GPU forward）
         scores = self.fusion(cand_emb, graph_emb_batch)             # (B, M)
         return scores.masked_fill(mask_batch == 0, float('-inf'))
 
@@ -471,29 +457,68 @@ class ConstructEnv:
         self.n    = 4
         self.current_candidates = []
 
+        # 初始化缓存（全量构建，仅在 reset 时做一次）
+        self._rebuild_cache()
+
         return self._get_obs()
+
+    def _rebuild_cache(self):
+        """全量构建 KDTree 和邻接矩阵缓存（仅 reset 时调用）"""
+        pos_arr = np.array(self.pos, dtype=np.float64)
+        rad_arr = np.array(self.rad, dtype=np.float64)
+        self._kdtree = KDTree(pos_arr)
+        self._adj_np = self._full_adj(pos_arr, rad_arr)
+
+    def _full_adj(self, pos, rad):
+        """全量计算邻接矩阵（numpy 向量化）"""
+        diff = pos[:, None, :] - pos[None, :, :]
+        diff -= np.round(diff / self.L) * self.L
+        dist = np.linalg.norm(diff, axis=-1)
+        adj  = (dist <= rad[:, None] + rad[None, :] + self.cfg.edge_tol).astype(np.float32)
+        np.fill_diagonal(adj, 0)
+        return adj
+
+    def _update_cache_incremental(self, new_pos, new_rad):
+        """
+        新增一个粒子后增量更新缓存，O(N) 而非 O(N²)。
+        在 step() 中粒子加入 self.pos/rad 后立即调用。
+        """
+        old_pos = np.array(self.pos[:-1], dtype=np.float64)  # (N, 3)
+        old_rad = np.array(self.rad[:-1], dtype=np.float64)  # (N,)
+
+        # 新粒子到所有旧粒子的距离（含 PBC）
+        diff  = old_pos - new_pos[None, :]
+        diff -= np.round(diff / self.L) * self.L
+        dists = np.linalg.norm(diff, axis=-1)                # (N,)
+        touch = (dists <= old_rad + new_rad + self.cfg.edge_tol).astype(np.float32)
+
+        # 扩展邻接矩阵：在右侧加一列，底部加一行
+        N      = len(touch)
+        new_adj = np.zeros((N + 1, N + 1), dtype=np.float32)
+        new_adj[:N, :N] = self._adj_np
+        new_adj[:N, N]  = touch
+        new_adj[N, :N]  = touch
+        self._adj_np    = new_adj
+
+        # 重建 KDTree（插入操作 KDTree 不支持增量，但重建是 O(N log N) 而非 O(N²)）
+        self._kdtree = KDTree(np.array(self.pos, dtype=np.float64))
 
     # ---- 内部方法 ----
     def _get_candidates(self):
         cfg     = self.cfg
-        all_pos = np.array(self.pos).astype(np.float64)
-        all_rad = np.array(self.rad).astype(np.float64)
+        all_pos = np.array(self.pos, dtype=np.float64)
+        all_rad = np.array(self.rad, dtype=np.float64)
 
-        # KDTree 预筛选近邻对：搜索半径 = 最大直径 × 2 + 最大直径（最坏情况阈值）
+        # 使用缓存的 KDTree，无需重建
         max_r_new = cfg.diameters.max() / 2.0
-        max_rad   = all_rad.max()
-        search_r  = 2 * max_rad + 2 * max_r_new + cfg.collision_tol
-
-        # PBC 处理：复制 27 个镜像箱（3D），KDTree 查询后去重
-        # 简化方案：直接在原坐标上建树，距离剪枝在 Numba 里用 PBC 修正
-        tree   = KDTree(all_pos)
-        pairs  = np.array(list(tree.query_pairs(r=search_r)), dtype=np.int64)
+        search_r  = 2 * all_rad.max() + 2 * max_r_new + cfg.collision_tol
+        pairs     = np.array(list(self._kdtree.query_pairs(r=search_r)), dtype=np.int64)
 
         # 若近邻对为空（粒子数极少时），退化为全量
         if len(pairs) == 0:
-            n = len(all_pos)
+            n     = len(all_pos)
             pairs = np.array([[i, j] for i in range(n)
-                              for j in range(i+1, n)], dtype=np.int64)
+                              for j in range(i + 1, n)], dtype=np.int64)
 
         cands = find_candidates_njit(
             all_pos, all_rad, pairs,
@@ -536,9 +561,10 @@ class ConstructEnv:
         return obs, mask
 
     def get_graph_data(self):
-        """返回当前粒子的位置和半径（供图编码器）"""
-        return np.array(self.pos, dtype=np.float64), \
-               np.array(self.rad, dtype=np.float64)
+        """返回当前粒子的位置、半径和缓存的邻接矩阵（供图编码器）"""
+        return (np.array(self.pos, dtype=np.float64),
+                np.array(self.rad, dtype=np.float64),
+                self._adj_np.copy())
 
     def step(self, action_idx):
         """
@@ -560,6 +586,9 @@ class ConstructEnv:
         self.pos.append(pos_new)
         self.rad.append(r_new)
         self.n += 1
+
+        # 增量更新缓存（O(N)，不重建整个树/矩阵）
+        self._update_cache_incremental(pos_new, r_new)
 
         # 基础奖励
         vol_added = (4.0 / 3.0) * np.pi * (r_new ** 3)
@@ -624,19 +653,18 @@ def _worker_collect_episode(args):
     done = False
 
     while not done:
-        graph_pos, graph_rad = env.get_graph_data()
-        obs_t  = torch.from_numpy(obs).unsqueeze(0)    # (1, M, 5) CPU
-        mask_t = torch.from_numpy(mask).unsqueeze(0)   # (1, M)    CPU
+        graph_pos, graph_rad, adj_np = env.get_graph_data()
+        obs_t  = torch.from_numpy(obs).unsqueeze(0)
+        mask_t = torch.from_numpy(mask).unsqueeze(0)
 
         if policy is None:
-            # 随机策略：均匀采样有效候选
             valid_idx = np.where(mask > 0)[0]
             if len(valid_idx) == 0:
                 break
             action_idx = int(np.random.choice(valid_idx))
         else:
             with torch.no_grad():
-                scores = policy(obs_t, graph_pos, graph_rad, env.L, mask_t)
+                scores = policy(obs_t, graph_pos, graph_rad, env.L, adj_np, mask_t)
             scores_np = scores[0].numpy()
             valid_idx = np.where(mask > 0)[0]
             if len(valid_idx) == 0:
@@ -646,7 +674,7 @@ def _worker_collect_episode(args):
                 action_idx = int(np.argmax(scores_np))
             else:
                 valid_scores = scores_np[valid_idx]
-                valid_scores -= valid_scores.max()      # 数值稳定
+                valid_scores -= valid_scores.max()
                 probs = np.exp(valid_scores / temperature)
                 probs /= probs.sum()
                 action_idx = int(np.random.choice(valid_idx, p=probs))
@@ -658,6 +686,7 @@ def _worker_collect_episode(args):
             'mask'      : mask,
             'graph_pos' : graph_pos.copy(),
             'graph_rad' : graph_rad.copy(),
+            'adj_np'    : adj_np,           # 缓存的邻接矩阵，训练直接用
             'L'         : env.L,
             'action'    : action_idx,
             'reward'    : reward,
