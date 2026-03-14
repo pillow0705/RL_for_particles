@@ -55,7 +55,7 @@ class Config:
     diam_step     = 0.05
     diameters     = np.arange(0.7, 1.40, 0.05)
     max_candidates = 1000
-    collision_tol  = 0.05
+    collision_tol  = 0.0
     edge_tol       = 0.05
     max_particles  = 200
 
