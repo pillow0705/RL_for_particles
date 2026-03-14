@@ -543,11 +543,23 @@ class ConstructEnv:
         # 增量更新邻接矩阵
         self._update_adj_incremental(pos_new, r_new)
 
-        # ---- v7.0 增量维护 ----
+        # ---- v7.0 增量维护（记录候选点变化）----
+        n_before_filter = len(self._candidate_set)
         # 1. 过滤与新粒子碰撞的旧候选点
         self._filter_candidates(pos_new, r_new)
+        n_filtered = n_before_filter - len(self._candidate_set)
+
+        n_before_add = len(self._candidate_set)
         # 2. 新增包含新粒子的三元组
         self._add_new_triplets(self.n - 1)
+        n_added = len(self._candidate_set) - n_before_add
+
+        self._last_cand_stats = {
+            'n_before'  : n_before_filter,   # 选完候选点后的集合大小
+            'n_filtered': n_filtered,         # 被新粒子挤掉的数量
+            'n_added'   : n_added,            # 新三元组贡献的数量
+            'n_after'   : len(self._candidate_set),  # 最终候选点数
+        }
 
         done = self.n >= cfg.max_particles
         obs, mask = self._get_obs()
@@ -625,6 +637,7 @@ def _worker_collect_episode(args):
             'L'         : env.L,
             'action'    : action_idx,
             'reward'    : reward,
+            'cand_stats': dict(env._last_cand_stats),
         })
 
         obs, mask = next_obs, next_mask
@@ -805,7 +818,8 @@ def train():
         log_f  = open(cfg.log_file, 'w', newline='')
         writer = csv.writer(log_f)
         writer.writerow(["Iteration", "PhiMean", "PhiMax", "PhiMin",
-                         "AvgSteps", "Loss"])
+                         "AvgSteps", "Loss",
+                         "AvgCandsBefore", "AvgFiltered", "AvgAdded", "AvgCandsAfter"])
 
         for iteration in range(cfg.num_iterations):
             t0 = time.time()
@@ -827,12 +841,24 @@ def train():
             print(f"  phi: mean={phi_mean:.4f}  max={phi_max:.4f}  "
                   f"min={phi_min:.4f}  avg_steps={avg_steps:.1f}")
 
+            # 候选点变化统计
+            all_cs = [s['cand_stats'] for t in trajs for s in t['steps']]
+            avg_before   = np.mean([c['n_before']   for c in all_cs])
+            avg_filtered = np.mean([c['n_filtered'] for c in all_cs])
+            avg_added    = np.mean([c['n_added']    for c in all_cs])
+            avg_after    = np.mean([c['n_after']    for c in all_cs])
+            print(f"  候选点: before={avg_before:.1f}  "
+                  f"filtered={avg_filtered:.1f}  added={avg_added:.1f}  "
+                  f"after={avg_after:.1f}")
+
             print(f"  训练 {cfg.train_epochs} epoch ...")
             loss = trainer.train(trajs)
             print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
 
             writer.writerow([iteration + 1, phi_mean, phi_max, phi_min,
-                             avg_steps, loss])
+                             avg_steps, loss,
+                             round(avg_before, 2), round(avg_filtered, 2),
+                             round(avg_added, 2),  round(avg_after, 2)])
             log_f.flush()
 
             if (iteration + 1) % cfg.save_interval == 0:
