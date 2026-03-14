@@ -65,15 +65,7 @@ class Config:
     lr                = 3e-4        # 学习率
     gamma             = 0.99        # 折扣因子
     temperature       = 1.0         # 随机采样温度（第0轮）
-    use_dense_reward  = True        # True: 逐步折扣奖励; False: 只用终局 phi
     baseline_alpha    = 0.05        # 运行 baseline 的指数平滑系数
-
-    # ---- 奖励权重 ----
-    reward_vol_coef   = 5.0         # 体积奖励系数
-    reward_coord_coef = 0.5         # 配位数奖励系数
-    reward_phi_coef   = 20.0        # 终局密度奖励系数（phi - 0.60）
-    reward_phi_thresh = 0.60        # 密度奖励起始阈值
-    reward_disp_coef  = 10.0        # 多分散性奖励系数
 
     # ---- 输出 ----
     log_file      = "v6.0_train_log.csv"
@@ -590,28 +582,14 @@ class ConstructEnv:
         # 增量更新缓存（O(N)，不重建整个树/矩阵）
         self._update_cache_incremental(pos_new, r_new)
 
-        # 基础奖励
-        vol_added = (4.0 / 3.0) * np.pi * (r_new ** 3)
-        reward    = vol_added * cfg.reward_vol_coef + coord * cfg.reward_coord_coef
-
         done = self.n >= cfg.max_particles
-
         obs, mask = self._get_obs()
 
-        # 无候选即结束
         if np.sum(mask) == 0 and not done:
             done = True
 
-        # 终局奖励
-        if done:
-            box_vol    = self.L ** 3
-            total_vol  = sum((4.0 / 3.0) * np.pi * (r ** 3) for r in self.rad)
-            phi_final  = total_vol / box_vol
-            density_bonus  = max(0.0, (phi_final - cfg.reward_phi_thresh)
-                                 * cfg.reward_phi_coef)
-            diam_arr   = np.array(self.rad) * 2.0
-            disp_bonus = np.std(diam_arr) * cfg.reward_disp_coef
-            reward    += density_bonus + disp_bonus
+        # 只在终局给奖励：最终堆积率 phi
+        reward = self.get_phi() if done else 0.0
 
         return (obs, mask), reward, done
 
@@ -760,34 +738,22 @@ class DataCollector:
 class Trainer:
     """
     使用 REINFORCE 算法训练策略网络。
-    奖励信号：
-      use_dense_reward=True  → 折扣累积奖励
-      use_dense_reward=False → 只用终局 phi 作为 return
+    奖励信号：只在终局给 phi_final，所有步共享同一个 return。
     Baseline：运行平均（指数平滑）
     """
     def __init__(self, policy: PackingPolicy, cfg: Config):
         self.policy    = policy
         self.cfg       = cfg
         self.optimizer = optim.Adam(policy.parameters(), lr=cfg.lr)
-        self.baseline  = 0.0   # 运行 baseline
+        self.baseline  = 0.0
 
     def _compute_returns(self, traj):
-        """计算折扣累积回报"""
-        cfg     = self.cfg
-        steps   = traj['steps']
-        phi     = traj['phi_final']
-        rewards = [s['reward'] for s in steps]
-
-        if not cfg.use_dense_reward:
-            # 稀疏：只在最后一步给 phi 奖励
-            rewards = [0.0] * (len(rewards) - 1) + [phi]
-
-        returns = []
-        G = 0.0
-        for r in reversed(rewards):
-            G = r + cfg.gamma * G
-            returns.insert(0, G)
-        return returns
+        """
+        终局奖励：每一步的 return 都等于最终 phi。
+        含义：这局轨迹里的每个动作，都对最终结果负责。
+        """
+        phi = traj['phi_final']
+        return [phi] * len(traj['steps'])
 
     def train(self, trajectories):
         """对一批轨迹执行多个 epoch 的 REINFORCE 更新"""
