@@ -20,7 +20,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import multiprocessing as mp
 from numba import njit
+from scipy.spatial import KDTree
 
 # =====================================================================
 # 0. 全局超参数配置
@@ -37,8 +39,6 @@ class Config:
     diam_step     = 0.05            # 直径步长
     diameters     = np.arange(0.7, 1.40, 0.05)  # 所有可选直径
     max_candidates = 1000           # 每步最多候选位置数
-    active_window  = 20             # 参与三球求解的最近粒子窗口
-    active_sample  = 10             # 从旧粒子中随机补充的数量
     collision_tol  = 0.05           # 碰撞容忍阈值（Numba 内）
     edge_tol       = 0.05           # 图边构建：相切容忍（r_i+r_j+edge_tol 判断）
     max_particles  = 200            # 单局最多放置粒子数（超出则强制结束）
@@ -57,6 +57,7 @@ class Config:
     fusion_layers     = [256, 128]  # 融合 MLP 层宽，最后自动接 → 1
 
     # ---- 训练超参数 ----
+    num_workers       = 2           # 并行采集的进程数
     num_iterations    = 20          # 外层迭代轮数
     samples_per_iter  = 30          # 每轮采集的堆积样本数
     train_epochs      = 10          # 每轮训练的 epoch 数
@@ -142,65 +143,69 @@ def solve_three_spheres_njit(p1, r1, p2, r2, p3, r3, r_new):
 
 
 @njit
-def find_candidates_njit(active_pos, active_rad, all_pos, all_rad,
+def find_candidates_njit(all_pos, all_rad, neighbor_pairs,
                          L, diameters, max_cands, collision_tol):
     """
-    遍历所有直径，三球定位求候选放置坐标。
+    KDTree 预筛选后的三球定位。
+    neighbor_pairs: (P, 2) int 数组，每行是一对近邻粒子索引 (i, j)
     返回: (M, 5) 数组 [x, y, z, r, coord]
     """
     results  = np.zeros((max_cands, 5))
     count    = 0
-    n_active = len(active_pos)
+    n_pairs  = len(neighbor_pairs)
     n_all    = len(all_pos)
 
     for d_idx in range(len(diameters)):
         r_new = diameters[d_idx] / 2.0
 
-        for i in range(n_active):
-            p_i = active_pos[i]
-            r_i = active_rad[i]
+        for p_idx in range(n_pairs):
+            i   = neighbor_pairs[p_idx, 0]
+            j   = neighbor_pairs[p_idx, 1]
+            p_i = all_pos[i]
+            r_i = all_rad[i]
+            p_j = p_i + pbc_diff_njit(all_pos[j], p_i, L)
+            r_j = all_rad[j]
 
-            for j in range(i + 1, n_active):
-                p_j  = p_i + pbc_diff_njit(active_pos[j], p_i, L)
-                r_j  = active_rad[j]
-                d_ij = np.sqrt(np.sum((p_j - p_i) ** 2))
+            # ij 对距离剪枝（KDTree 用的是未考虑 r_new 的阈值，这里精确过滤）
+            d_ij = np.sqrt(np.sum((p_j - p_i) ** 2))
+            if d_ij > (r_i + r_j + 2 * r_new + collision_tol):
+                continue
 
-                if d_ij > (r_i + r_j + 2 * r_new + collision_tol):
+            for k in range(n_all):
+                if k == i or k == j:
+                    continue
+                p_k = p_i + pbc_diff_njit(all_pos[k], p_i, L)
+                r_k = all_rad[k]
+
+                valid, s1, s2 = solve_three_spheres_njit(
+                    p_i, r_i, p_j, r_j, p_k, r_k, r_new)
+                if not valid:
                     continue
 
-                for k in range(j + 1, n_active):
-                    p_k = p_i + pbc_diff_njit(active_pos[k], p_i, L)
-                    r_k = active_rad[k]
+                solutions = np.stack((s1, s2))
+                for s_idx in range(2):
+                    sol         = solutions[s_idx]
+                    collision   = False
+                    coordination = 0
 
-                    valid, s1, s2 = solve_three_spheres_njit(
-                        p_i, r_i, p_j, r_j, p_k, r_k, r_new)
-                    if not valid:
-                        continue
+                    for m in range(n_all):
+                        dm   = pbc_diff_njit(all_pos[m], sol, L)
+                        dist = np.sqrt(np.sum(dm ** 2))
+                        gap  = dist - (all_rad[m] + r_new)
 
-                    solutions = np.stack((s1, s2))
-                    for s_idx in range(2):
-                        sol = solutions[s_idx]
-                        collision    = False
-                        coordination = 0
+                        if gap < -collision_tol:
+                            collision = True
+                            break
+                        if gap < collision_tol:
+                            coordination += 1
 
-                        for m in range(n_all):
-                            dm   = pbc_diff_njit(all_pos[m], sol, L)
-                            dist = np.sqrt(np.sum(dm ** 2))
-                            gap  = dist - (all_rad[m] + r_new)
-
-                            if gap < -collision_tol:
-                                collision = True
-                                break
-                            if gap < collision_tol:
-                                coordination += 1
-
-                        if not collision:
-                            results[count, 0:3] = sol % L
-                            results[count, 3]   = r_new
-                            results[count, 4]   = coordination
-                            count += 1
-                            if count >= max_cands:
-                                return results[:count]
+                    if not collision:
+                        results[count, 0:3] = sol % L
+                        results[count, 3]   = r_new
+                        results[count, 4]   = coordination
+                        count += 1
+                        if count >= max_cands:
+                            return results[:count]
 
     return results[:count]
 
@@ -462,23 +467,28 @@ class ConstructEnv:
 
     # ---- 内部方法 ----
     def _get_candidates(self):
-        cfg    = self.cfg
-        n      = self.n
-        # 取最近 active_window 个粒子，再随机补充旧粒子
-        active_idx = list(range(max(0, n - cfg.active_window), n))
-        n_old  = max(0, n - cfg.active_window)
-        n_samp = min(cfg.active_sample, n_old)
-        if n_samp > 0:
-            others = np.random.choice(range(n_old), n_samp, replace=False)
-            active_idx.extend(others.tolist())
+        cfg     = self.cfg
+        all_pos = np.array(self.pos).astype(np.float64)
+        all_rad = np.array(self.rad).astype(np.float64)
 
-        active_pos = np.array(self.pos)[active_idx].astype(np.float64)
-        active_rad = np.array(self.rad)[active_idx].astype(np.float64)
-        all_pos    = np.array(self.pos).astype(np.float64)
-        all_rad    = np.array(self.rad).astype(np.float64)
+        # KDTree 预筛选近邻对：搜索半径 = 最大直径 × 2 + 最大直径（最坏情况阈值）
+        max_r_new = cfg.diameters.max() / 2.0
+        max_rad   = all_rad.max()
+        search_r  = 2 * max_rad + 2 * max_r_new + cfg.collision_tol
+
+        # PBC 处理：复制 27 个镜像箱（3D），KDTree 查询后去重
+        # 简化方案：直接在原坐标上建树，距离剪枝在 Numba 里用 PBC 修正
+        tree   = KDTree(all_pos)
+        pairs  = np.array(list(tree.query_pairs(r=search_r)), dtype=np.int64)
+
+        # 若近邻对为空（粒子数极少时），退化为全量
+        if len(pairs) == 0:
+            n = len(all_pos)
+            pairs = np.array([[i, j] for i in range(n)
+                              for j in range(i+1, n)], dtype=np.int64)
 
         cands = find_candidates_njit(
-            active_pos, active_rad, all_pos, all_rad,
+            all_pos, all_rad, pairs,
             self.L, cfg.diameters, cfg.max_candidates, cfg.collision_tol
         )
         return cands.tolist()
@@ -578,6 +588,85 @@ class ConstructEnv:
 # =====================================================================
 # 4. 数据采集器
 # =====================================================================
+
+def _worker_collect_episode(args):
+    """
+    子进程中运行单局完整采集。
+    worker 内部全程使用 CPU，避免多进程 CUDA 共享问题。
+    args: (policy_state_dict, greedy, temperature, seed)
+    """
+    policy_state_dict, greedy, temperature, seed = args
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    cfg         = Config()
+    cpu_device  = torch.device('cpu')
+
+    # 在子进程内重建模型（CPU）
+    if policy_state_dict is not None:
+        policy = PackingPolicy(cfg)
+        policy.load_state_dict(policy_state_dict)
+        policy.eval()
+    else:
+        policy = None
+
+    env = ConstructEnv(cfg)
+    obs, mask = env.reset()
+    traj_steps = []
+    done = False
+
+    while not done:
+        graph_pos, graph_rad = env.get_graph_data()
+        obs_t  = torch.from_numpy(obs).unsqueeze(0)    # (1, M, 5) CPU
+        mask_t = torch.from_numpy(mask).unsqueeze(0)   # (1, M)    CPU
+
+        if policy is None:
+            # 随机策略：均匀采样有效候选
+            valid_idx = np.where(mask > 0)[0]
+            if len(valid_idx) == 0:
+                break
+            action_idx = int(np.random.choice(valid_idx))
+        else:
+            with torch.no_grad():
+                scores = policy(obs_t, graph_pos, graph_rad, env.L, mask_t)
+            scores_np = scores[0].numpy()
+            valid_idx = np.where(mask > 0)[0]
+            if len(valid_idx) == 0:
+                break
+
+            if greedy:
+                action_idx = int(np.argmax(scores_np))
+            else:
+                valid_scores = scores_np[valid_idx]
+                valid_scores -= valid_scores.max()      # 数值稳定
+                probs = np.exp(valid_scores / temperature)
+                probs /= probs.sum()
+                action_idx = int(np.random.choice(valid_idx, p=probs))
+
+        (next_obs, next_mask), reward, done = env.step(action_idx)
+
+        traj_steps.append({
+            'obs'       : obs,
+            'mask'      : mask,
+            'graph_pos' : graph_pos.copy(),
+            'graph_rad' : graph_rad.copy(),
+            'L'         : env.L,
+            'action'    : action_idx,
+            'reward'    : reward,
+        })
+
+        obs, mask = next_obs, next_mask
+
+    phi_final = env.get_phi()
+    return {
+        'steps'     : traj_steps,
+        'phi_final' : phi_final,
+        'final_pos' : np.array(env.pos, dtype=np.float64).copy(),
+        'final_rad' : np.array(env.rad, dtype=np.float64).copy(),
+        'L'         : env.L,
+    }
+
+
 class DataCollector:
     """
     使用给定策略（或随机策略）采集完整堆积轨迹。
@@ -591,79 +680,39 @@ class DataCollector:
 
     def collect(self, policy, n_samples, greedy=False):
         """
-        policy  : PackingPolicy 或 None（None 则使用随机策略）
-        n_samples: 采集样本数
-        greedy  : True=贪婪选最高分; False=按 softmax 温度采样
+        并行采集 n_samples 条轨迹。
+        每个子进程独立跑一局完整 episode（CPU 推理），主进程负责汇总。
+
+        policy  : PackingPolicy 或 None（None 则随机策略）
+        greedy  : True=贪婪; False=温度采样
         返回    : list of trajectory dict
         """
-        cfg        = self.cfg
-        device     = cfg.device
-        trajectories = []
+        cfg = self.cfg
 
-        for ep in range(n_samples):
-            env  = ConstructEnv(cfg)
-            obs, mask = env.reset()
-            traj_steps = []
-            done = False
+        # 将模型权重移到 CPU 后序列化传给子进程（避免 CUDA 多进程问题）
+        if policy is not None:
+            state_dict = {k: v.cpu() for k, v in policy.state_dict().items()}
+        else:
+            state_dict = None
 
-            while not done:
-                graph_pos, graph_rad = env.get_graph_data()
+        # 为每个 episode 分配独立随机种子，保证可复现且互不干扰
+        seeds     = np.random.randint(0, 2**31, size=n_samples).tolist()
+        args_list = [
+            (state_dict, greedy, cfg.temperature, seed)
+            for seed in seeds
+        ]
 
-                obs_t  = torch.from_numpy(obs).unsqueeze(0).to(device)   # (1,M,5)
-                mask_t = torch.from_numpy(mask).unsqueeze(0).to(device)  # (1,M)
+        # 并行执行
+        ctx = mp.get_context('spawn')
+        with ctx.Pool(processes=min(cfg.num_workers, n_samples)) as pool:
+            trajectories = pool.map(_worker_collect_episode, args_list)
 
-                if policy is None:
-                    # 纯随机策略：对有效候选均匀采样
-                    valid_idx = np.where(mask > 0)[0]
-                    if len(valid_idx) == 0:
-                        break
-                    action_idx = int(np.random.choice(valid_idx))
-                else:
-                    with torch.no_grad():
-                        scores = policy(obs_t, graph_pos, graph_rad,
-                                        env.L, mask_t)          # (1, M)
-                    scores_np = scores[0].cpu().numpy()
-
-                    valid_idx = np.where(mask > 0)[0]
-                    if len(valid_idx) == 0:
-                        break
-
-                    if greedy:
-                        action_idx = int(np.argmax(scores_np))
-                    else:
-                        # softmax 温度采样
-                        valid_scores = scores_np[valid_idx]
-                        valid_scores -= valid_scores.max()       # 数值稳定
-                        probs = np.exp(valid_scores / cfg.temperature)
-                        probs /= probs.sum()
-                        action_idx = int(np.random.choice(valid_idx, p=probs))
-
-                (next_obs, next_mask), reward, done = env.step(action_idx)
-
-                traj_steps.append({
-                    'obs'       : obs,
-                    'mask'      : mask,
-                    'graph_pos' : graph_pos.copy(),
-                    'graph_rad' : graph_rad.copy(),
-                    'L'         : env.L,
-                    'action'    : action_idx,
-                    'reward'    : reward,
-                })
-
-                obs, mask = next_obs, next_mask
-
-            phi_final = env.get_phi()
-            trajectories.append({
-                'steps'     : traj_steps,
-                'phi_final' : phi_final,
-                'final_pos' : np.array(env.pos, dtype=np.float64).copy(),
-                'final_rad' : np.array(env.rad, dtype=np.float64).copy(),
-                'L'         : env.L,
-            })
-
-            if (ep + 1) % 10 == 0:
-                print(f"  [采集] {ep+1}/{n_samples}  phi={phi_final:.4f}  "
-                      f"步数={len(traj_steps)}")
+        # 打印统计
+        phis = [t['phi_final'] for t in trajectories]
+        print(f"  [采集完成] {n_samples} 条  "
+              f"phi: mean={np.mean(phis):.4f}  "
+              f"max={np.max(phis):.4f}  "
+              f"min={np.min(phis):.4f}")
 
         return trajectories
 
@@ -720,7 +769,9 @@ class Trainer:
             return 0.0
 
         # 更新 baseline（指数平滑）
-        avg_return    = np.mean([s['return'] for s in all_samples])
+        all_returns   = np.array([s['return'] for s in all_samples])
+        avg_return    = all_returns.mean()
+        ret_std       = all_returns.std() + 1e-8   # 用于 advantage 归一化
         self.baseline = ((1 - cfg.baseline_alpha) * self.baseline
                          + cfg.baseline_alpha * avg_return)
 
@@ -741,7 +792,7 @@ class Trainer:
                     mask_t   = torch.from_numpy(sample['mask']).unsqueeze(0).to(device)
                     action   = sample['action']
                     ret      = sample['return']
-                    advantage = ret - self.baseline
+                    advantage = (ret - self.baseline) / ret_std  # 归一化，防止梯度爆炸
 
                     scores = policy(obs_t,
                                     sample['graph_pos'],
@@ -988,6 +1039,7 @@ def generate_packing(model_path, output_file="final_packing_v6.conf"):
 # 入口
 # =====================================================================
 if __name__ == "__main__":
+    mp.set_start_method('spawn', force=True)
     train()
     # 训练完成后可调用：
     # generate_packing("construct_v6.0_final.pth")
