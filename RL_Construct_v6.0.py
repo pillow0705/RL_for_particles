@@ -65,7 +65,6 @@ class Config:
     lr                = 3e-4        # 学习率
     gamma             = 0.99        # 折扣因子
     temperature       = 1.0         # 随机采样温度（第0轮）
-    baseline_alpha    = 0.05        # 运行 baseline 的指数平滑系数
 
     # ---- 输出 ----
     log_file      = "v6.0_train_log.csv"
@@ -734,25 +733,21 @@ class DataCollector:
 
 
 # =====================================================================
-# 5. 训练器（REINFORCE with running baseline）
+# 5. 训练器（REINFORCE with batch normalization）
 # =====================================================================
 class Trainer:
     """
     使用 REINFORCE 算法训练策略网络。
     奖励信号：只在终局给 phi_final，所有步共享同一个 return。
-    Baseline：运行平均（指数平滑）
+    Advantage：batch 内均值/标准差归一化，稳定在 [-2, 2] 左右。
     """
     def __init__(self, policy: PackingPolicy, cfg: Config):
         self.policy    = policy
         self.cfg       = cfg
         self.optimizer = optim.Adam(policy.parameters(), lr=cfg.lr)
-        self.baseline  = 0.0
 
     def _compute_returns(self, traj):
-        """
-        终局奖励：每一步的 return 都等于最终 phi。
-        含义：这局轨迹里的每个动作，都对最终结果负责。
-        """
+        """终局奖励：每一步的 return 都等于最终 phi。"""
         phi = traj['phi_final']
         return [phi] * len(traj['steps'])
 
@@ -762,7 +757,6 @@ class Trainer:
         device = cfg.device
         policy = self.policy
 
-        # 收集所有 (obs, mask, graph_pos, graph_rad, L, action, return)
         all_samples = []
         for traj in trajectories:
             returns = self._compute_returns(traj)
@@ -772,12 +766,10 @@ class Trainer:
         if len(all_samples) == 0:
             return 0.0
 
-        # 更新 baseline（指数平滑）
-        all_returns   = np.array([s['return'] for s in all_samples])
-        avg_return    = all_returns.mean()
-        ret_std       = all_returns.std() + 1e-8   # 用于 advantage 归一化
-        self.baseline = ((1 - cfg.baseline_alpha) * self.baseline
-                         + cfg.baseline_alpha * avg_return)
+        # batch 内归一化：advantage = (G - mean) / (std + eps)
+        all_returns = np.array([s['return'] for s in all_samples])
+        ret_mean    = all_returns.mean()
+        ret_std     = all_returns.std() + 1e-8
 
         total_loss = 0.0
         n_updates  = 0
@@ -790,16 +782,15 @@ class Trainer:
                 if len(mb) == 0:
                     continue
 
-                # 批量组装 obs / mask / action / advantage
                 obs_batch  = torch.from_numpy(
                     np.stack([s['obs']  for s in mb])).to(device)   # (B, M, 5)
                 mask_batch = torch.from_numpy(
                     np.stack([s['mask'] for s in mb])).to(device)   # (B, M)
                 actions    = torch.tensor(
-                    [s['action'] for s in mb], dtype=torch.long, device=device)  # (B,)
+                    [s['action'] for s in mb], dtype=torch.long, device=device)
                 advantages = torch.tensor(
-                    [(s['return'] - self.baseline) / ret_std for s in mb],
-                    dtype=torch.float32, device=device)              # (B,)
+                    [(s['return'] - ret_mean) / ret_std for s in mb],
+                    dtype=torch.float32, device=device)
 
                 # 批量前向传播（CandidateEncoder + FusionDecoder 全批量，GraphEncoder 逐样本）
                 scores    = policy.batch_forward(obs_batch, mask_batch, mb, device)  # (B, M)
@@ -836,7 +827,7 @@ def train():
     log_f  = open(cfg.log_file, 'w', newline='')
     writer = csv.writer(log_f)
     writer.writerow(["Iteration", "PhiMean", "PhiMax", "PhiMin",
-                     "AvgSteps", "Loss", "Baseline"])
+                     "AvgSteps", "Loss"])
 
     for iteration in range(cfg.num_iterations):
         t0 = time.time()
@@ -864,12 +855,11 @@ def train():
         # ---- 训练 ----
         print(f"  训练 {cfg.train_epochs} epoch ...")
         loss = trainer.train(trajs)
-        print(f"  loss={loss:.4f}  baseline={trainer.baseline:.4f}  "
-              f"耗时={time.time()-t0:.1f}s")
+        print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
 
         # ---- 记录 ----
         writer.writerow([iteration + 1, phi_mean, phi_max, phi_min,
-                         avg_steps, loss, trainer.baseline])
+                         avg_steps, loss])
         log_f.flush()
 
         # ---- 保存 checkpoint ----
