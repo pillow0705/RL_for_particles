@@ -306,21 +306,19 @@ class GraphEncoder(nn.Module):
 
     def build_adjacency(self, pos, rad, L):
         """
-        根据相切条件动态构建邻接矩阵（CPU numpy → GPU tensor）。
+        向量化构建邻接矩阵，替代 Python 双重循环。
         pos: (N, 3) numpy  |  rad: (N,) numpy
         返回: (N, N) FloatTensor
         """
-        N   = len(pos)
-        adj = np.zeros((N, N), dtype=np.float32)
-        for i in range(N):
-            for j in range(i + 1, N):
-                diff = pos[j] - pos[i]
-                diff -= np.round(diff / L) * L          # PBC 修正
-                dist = np.linalg.norm(diff)
-                if dist <= rad[i] + rad[j] + self.edge_tol:
-                    adj[i, j] = 1.0
-                    adj[j, i] = 1.0
-        return torch.from_numpy(adj)
+        # (N, N, 3) 广播差值，PBC 修正
+        diff = pos[:, None, :] - pos[None, :, :]        # (N, N, 3)
+        diff -= np.round(diff / L) * L
+        dist = np.linalg.norm(diff, axis=-1)            # (N, N)
+
+        # 相切条件：dist <= r_i + r_j + tol
+        touch = (dist <= rad[:, None] + rad[None, :] + self.edge_tol).astype(np.float32)
+        np.fill_diagonal(touch, 0)                      # 自环置 0
+        return torch.from_numpy(touch)
 
     def forward(self, pos, rad, L, device):
         """
@@ -398,30 +396,40 @@ class PackingPolicy(nn.Module):
 
     def forward(self, cand_feat, graph_pos, graph_rad, L, mask):
         """
-        cand_feat  : (1, n_cands, 5)  候选点特征（批量大小固定为1，单步推理）
-        graph_pos  : (N, 3) numpy     当前已放置粒子位置
-        graph_rad  : (N,)   numpy     当前已放置粒子半径
-        L          : float            箱子边长
-        mask       : (1, n_cands)     有效候选点掩码
-
-        返回: (1, n_cands) 得分（无效位置 mask=0 处填 -inf）
+        单样本推理接口（采集时使用）。
+        cand_feat : (1, n_cands, 5)
+        返回      : (1, n_cands) 得分
         """
-        device = cand_feat.device
+        device    = cand_feat.device
+        cand_emb  = self.cand_encoder(cand_feat)                    # (1, M, embed_dim)
+        graph_emb = self.graph_encoder(graph_pos, graph_rad, L, device).unsqueeze(0)  # (1, embed_dim)
+        scores    = self.fusion(cand_emb, graph_emb)                # (1, M)
+        return scores.masked_fill(mask == 0, float('-inf'))
 
-        # 左侧：候选点编码
-        cand_emb = self.cand_encoder(cand_feat)            # (1, n_cands, embed_dim)
+    def batch_forward(self, obs_batch, mask_batch, samples, device):
+        """
+        批量推理接口（训练时使用），显著提升 GPU 利用率。
 
-        # 右侧：图编码
-        graph_emb = self.graph_encoder(
-            graph_pos, graph_rad, L, device)               # (embed_dim,)
-        graph_emb = graph_emb.unsqueeze(0)                 # (1, embed_dim)
+        obs_batch  : (B, M, 5)  已在 device 上
+        mask_batch : (B, M)     已在 device 上
+        samples    : list of dict，包含 graph_pos / graph_rad / L
+        返回       : (B, M) 得分
+        """
+        B = obs_batch.size(0)
 
-        # 融合解码
-        scores = self.fusion(cand_emb, graph_emb)          # (1, n_cands)
+        # 左侧批量编码（一次 GPU forward）
+        cand_emb = self.cand_encoder(obs_batch)                     # (B, M, embed_dim)
 
-        # 掩码：无效候选填 -inf
-        scores = scores.masked_fill(mask == 0, float('-inf'))
-        return scores
+        # 右侧图编码：各样本图大小不同，逐个编码后 stack
+        graph_embs = []
+        for s in samples:
+            g = self.graph_encoder(s['graph_pos'], s['graph_rad'], s['L'], device)
+            graph_embs.append(g)
+        graph_emb_batch = torch.stack(graph_embs)                   # (B, embed_dim)
+
+        # 融合解码（一次 GPU forward）
+        scores = self.fusion(cand_emb, graph_emb_batch)             # (B, M)
+        return scores.masked_fill(mask_batch == 0, float('-inf'))
 
 
 # =====================================================================
@@ -786,32 +794,26 @@ class Trainer:
                 if len(mb) == 0:
                     continue
 
-                loss_list = []
-                for sample in mb:
-                    obs_t    = torch.from_numpy(sample['obs']).unsqueeze(0).to(device)
-                    mask_t   = torch.from_numpy(sample['mask']).unsqueeze(0).to(device)
-                    action   = sample['action']
-                    ret      = sample['return']
-                    advantage = (ret - self.baseline) / ret_std  # 归一化，防止梯度爆炸
+                # 批量组装 obs / mask / action / advantage
+                obs_batch  = torch.from_numpy(
+                    np.stack([s['obs']  for s in mb])).to(device)   # (B, M, 5)
+                mask_batch = torch.from_numpy(
+                    np.stack([s['mask'] for s in mb])).to(device)   # (B, M)
+                actions    = torch.tensor(
+                    [s['action'] for s in mb], dtype=torch.long, device=device)  # (B,)
+                advantages = torch.tensor(
+                    [(s['return'] - self.baseline) / ret_std for s in mb],
+                    dtype=torch.float32, device=device)              # (B,)
 
-                    scores = policy(obs_t,
-                                    sample['graph_pos'],
-                                    sample['graph_rad'],
-                                    sample['L'],
-                                    mask_t)              # (1, M)
+                # 批量前向传播（CandidateEncoder + FusionDecoder 全批量，GraphEncoder 逐样本）
+                scores    = policy.batch_forward(obs_batch, mask_batch, mb, device)  # (B, M)
+                log_probs = torch.nn.functional.log_softmax(scores, dim=-1)          # (B, M)
+                log_pa    = log_probs.gather(1, actions.unsqueeze(1)).squeeze(1)     # (B,)
 
-                    # log_softmax → log π(a|s)
-                    log_probs = torch.nn.functional.log_softmax(
-                        scores[0], dim=-1)               # (M,)
-                    log_pa    = log_probs[action]
-
-                    loss_list.append(-log_pa * advantage)
-
-                batch_loss = torch.stack(loss_list).mean()
+                batch_loss = -(log_pa * advantages).mean()
                 self.optimizer.zero_grad()
                 batch_loss.backward()
-                nn.utils.clip_grad_norm_(policy.parameters(),
-                                         max_norm=1.0)
+                nn.utils.clip_grad_norm_(policy.parameters(), max_norm=1.0)
                 self.optimizer.step()
 
                 total_loss += batch_loss.item()
