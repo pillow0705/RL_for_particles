@@ -30,8 +30,8 @@
 | 20260316_043255 | S1 | exp_embed_048_100iter | T=5.0, 嵌入型np.array([0.4,0.8,1.4]), s=50, **lr=5e-4** | **⛔已终止** iter22 | **0.7565**(iter7) ★ | iter17 loss=-16.77崩塌，iter18+ nan，avg_cands 175→712 |
 | 20260316_053140 | S1 | exp_embed_048_lr1e4 | T=5.0, 嵌入型np.array([0.4,0.8,1.4]), s=50, **lr=1e-4** | **⛔已终止** iter10 | 0.7523(iter7) | iter8崩(loss=nan)，lr=1e-4比5e-4更早崩！lr非关键 |
 | 20260316_033423 | S2 | exp_embed_048_20iter | T=5.0, 嵌入型np.array([0.4,0.8,1.4]), OMP=1, workers=10 | **✅已完成** 20轮 | 0.7551(iter14) | eval phi_mean=0.7397,N=192.2(超填充!),全>0.72；OMP=1未崩 |
-| 20260316_060133 | S1 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **运行中** iter4/100 | **0.7578**(iter4) ★★★ | 全局新纪录！avg_cands稳定~182，无崩塌迹象 |
-| 20260316_060333 | S2 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **运行中** iter3/100 | 0.7545(iter3) | phi_mean=0.7374，avg_cands降至169，极健康 |
+| 20260316_060133 | S1 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **运行中** iter8/100 | **0.7578**(iter4) ★★★ | iter7 loss=nan但iter8恢复(+0.317)，avg_cands308未爆炸，OMP=1减轻崩塌 |
+| 20260316_060333 | S2 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **运行中** iter7/100 | 0.7537(iter7) | 完全健康，avg_cands=181，phi_mean=0.7397 |
 
 ## 关键配置发现 ★★★
 **三峰 [0.5, 0.9, 1.4] T=5.0** 是突破性配置：
