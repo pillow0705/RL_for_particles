@@ -1,0 +1,41 @@
+{
+  "advantage_filter_ratio": 0.3,
+  "batch_size": 128,
+  "candidate_input_dim": 5,
+  "candidate_mlp_layers": [
+    32,
+    64,
+    128
+  ],
+  "ckpt_prefix": "construct_v7.0",
+  "collision_tol": 0.05,
+  "device": "cuda",
+  "diameters": [
+    0.7,
+    1.4
+  ],
+  "edge_tol": 0.05,
+  "embed_dim": 128,
+  "eval_conf_file": "v7.0_best_packing.conf",
+  "eval_episodes": 20,
+  "eval_report_file": "v7.0_eval_report.txt",
+  "eval_temperature": 1.0,
+  "gamma": 0.99,
+  "log_file": "v7.0_train_log.csv",
+  "lr": 0.0005,
+  "max_candidates": 1000,
+  "max_particles": 200,
+  "num_iterations": 20,
+  "num_workers": 8,
+  "rollback_tol": 0.01,
+  "samples_per_iter": 20,
+  "save_data": false,
+  "target_N": 100,
+  "target_phi": 0.72,
+  "temperature": 1.0,
+  "train_epochs": 1,
+  "transformer_d_model": 128,
+  "transformer_ffn_dim": 256,
+  "transformer_layers": 3,
+  "transformer_nhead": 4
+}

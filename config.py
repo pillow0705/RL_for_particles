@@ -9,7 +9,7 @@ class Config:
     # ---- 物理 / 环境参数 ----
     target_N       = 100
     target_phi     = 0.72
-    diameters      = np.arange(0.7, 1.50, 0.7)
+    diameters      = np.arange(0.7, 1.40, 0.05)
     max_candidates = 1000
     collision_tol  = 0.05
     edge_tol       = 0.05   # 评测时计算配位数用
@@ -28,14 +28,14 @@ class Config:
 
     # ---- 训练超参数 ----
     num_workers      = 8
-    num_iterations   = 20
-    samples_per_iter = 20
-    train_epochs     = 5
-    advantage_filter_ratio = 0.5   # 丢弃 |advantage| 最小的 30%，保留两端信号
+    num_iterations   = 25
+    samples_per_iter = 50
+    train_epochs     = 2
+    advantage_filter_ratio = 0.25   # 丢弃 |advantage| 最小的 30%，保留两端信号
     batch_size       = 128
     lr               = 5e-4
     gamma            = 0.99
-    temperature      = 1.0
+    temperature      = 5.0
 
     # ---- 输出 ----
     log_file      = "v7.0_train_log.csv"
