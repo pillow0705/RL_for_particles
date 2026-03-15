@@ -21,14 +21,15 @@ from utils import _Tee, create_experiment_dir, save_config, save_trajectories, s
 
 
 def _find_latest_checkpoint(exp_dir: pathlib.Path) -> pathlib.Path:
-    """在实验目录中找最新的 checkpoint（优先 final，其次最大 iter 编号）。"""
-    final = exp_dir / "construct_v7.0_final.pth"
-    if final.exists():
-        return final
+    """优先加载 best.pth，其次 final.pth，最后 iter 编号最大的。"""
+    for name in ["construct_v7.0_best.pth", "construct_v7.0_final.pth"]:
+        p = exp_dir / name
+        if p.exists():
+            return p
 
     ckpts = sorted(exp_dir.glob("construct_v7.0_iter*.pth"))
     if ckpts:
-        return ckpts[-1]   # iter 编号最大的
+        return ckpts[-1]
 
     raise FileNotFoundError(f"在 {exp_dir} 中没有找到任何 checkpoint。")
 
