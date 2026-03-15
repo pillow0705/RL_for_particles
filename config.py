@@ -11,7 +11,7 @@ class Config:
     target_phi     = 0.72
     diameters      = np.arange(0.7, 1.40, 0.05)
     max_candidates = 1000
-    collision_tol  = 0.0
+    collision_tol  = 0.05
     edge_tol       = 0.05   # 评测时计算配位数用
     max_particles  = 200
 
@@ -31,16 +31,16 @@ class Config:
     num_iterations   = 20
     samples_per_iter = 20
     train_epochs     = 5
-    advantage_filter_ratio = 0.3   # 丢弃 |advantage| 最小的 30%，保留两端信号
-    batch_size       = 256
-    lr               = 3e-4
+    advantage_filter_ratio = 0.5   # 丢弃 |advantage| 最小的 30%，保留两端信号
+    batch_size       = 128
+    lr               = 5e-4
     gamma            = 0.99
     temperature      = 1.0
 
     # ---- 输出 ----
     log_file      = "v7.0_train_log.csv"
     ckpt_prefix   = "construct_v7.0"
-    save_data     = True
+    save_data     = False
     rollback_tol  = 0.01
 
     # ---- 评测 ----
