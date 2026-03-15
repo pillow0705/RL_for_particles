@@ -21,7 +21,8 @@
 | 20260316_011620 | S2 | exp_3peak_crash | T=5.0, 三峰np.array([0.5,0.9,1.4]), s=50, lr=5e-4 | **已崩溃** iter1 | 0.6889 | worker资源耗尽BrokenPipe，已重启 |
 | 20260316_013032 | S1 | exp_3peak_100iter | T=5.0, 三峰np.array([0.5,0.9,1.4]), s=50, lr=5e-4 | **运行中** iter48/100 | **0.7254**(iter44) | phi_mean稳0.706~0.711，逼近纪录0.7281 |
 | 20260316_013143 | S2 | exp_3peak_v2 | T=5.0, 三峰np.array([0.5,0.9,1.4]), s=50, num_workers=20 | **已终止** iter2 | 0.7070(iter2) | iter2训练1469s，根因：20workers清理慢，已修复 |
-| 20260316_020324 | S2 | exp_3peak_v3 | T=5.0, 三峰np.array([0.5,0.9,1.4]), s=50, **num_workers=10** | **运行中** iter1/20 | - | 修复版：减workers降低清理压力 |
+| 20260316_020324 | S2 | exp_3peak_v3 | T=5.0, 三峰, num_workers=10 | **已终止** iter2 | 0.7153(iter2) | iter2训练1170s，减workers无效 |
+| 20260316_023247 | S2 | exp_3peak_v4_OMP1 | T=5.0, 三峰, num_workers=10, **OMP_NUM_THREADS=1** | **运行中** iter1/20 | - | 终极修复：强制单线程消除thread争用 |
 
 ## 关键配置发现 ★★★
 **三峰 [0.5, 0.9, 1.4] T=5.0** 是突破性配置：
@@ -36,3 +37,5 @@ S2复现实验：运行中
 
 ## 经验教训
 - 极端双峰直径 < 0.5 会导致 worker 死锁，需要谨慎
+- S2 训练慢根因：worker pool cleanup 慢导致训练期间 CPU 被 24-thread workers 占用；修复：OMP_NUM_THREADS=1 启动
+- torch.set_num_threads(1) 在代码中未能生效（worker 实测仍 24 threads），必须用环境变量覆盖
