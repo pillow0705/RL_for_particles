@@ -6,6 +6,7 @@ from config import Config
 
 
 class CandidateEncoder(nn.Module):
+    """MLP: 候选点特征 (B, 1000, 5) → (B, 1000, embed_dim)"""
     def __init__(self, cfg: Config):
         super().__init__()
         layers = []
@@ -20,88 +21,82 @@ class CandidateEncoder(nn.Module):
         return self.net(x)
 
 
-class GNNLayer(nn.Module):
-    def __init__(self, in_dim, out_dim):
-        super().__init__()
-        self.update = nn.Sequential(
-            nn.Linear(in_dim * 2, out_dim),
-            nn.ReLU()
-        )
-
-    def forward(self, node_feat, adj):
-        deg      = adj.sum(dim=-1, keepdim=True).clamp(min=1.0)
-        agg      = torch.matmul(adj, node_feat) / deg
-        combined = torch.cat([node_feat, agg], dim=-1)
-        return self.update(combined)
-
-
-class GraphEncoder(nn.Module):
+class ParticleTransformer(nn.Module):
+    """
+    已放置粒子 → Transformer Encoder → CLS token → embed_dim。
+    粒子特征: [x/L, y/L, z/L, r/r_max]  (4维，无需位置编码)
+    """
     def __init__(self, cfg: Config):
         super().__init__()
-        hid = cfg.graph_hidden_dim
-        self.input_proj = nn.Sequential(
-            nn.Linear(cfg.graph_input_dim, hid),
-            nn.ReLU()
+        d = cfg.transformer_d_model
+        self.input_proj = nn.Sequential(nn.Linear(4, d), nn.ReLU())
+        self.cls_token  = nn.Parameter(torch.zeros(1, 1, d))
+        encoder_layer   = nn.TransformerEncoderLayer(
+            d_model=d, nhead=cfg.transformer_nhead,
+            dim_feedforward=cfg.transformer_ffn_dim,
+            batch_first=True, dropout=0.0
         )
-        self.gnn_layers  = nn.ModuleList([GNNLayer(hid, hid) for _ in range(cfg.gnn_layers)])
-        self.output_proj = nn.Linear(hid * 2, cfg.embed_dim)
+        self.encoder     = nn.TransformerEncoder(encoder_layer, num_layers=cfg.transformer_layers)
+        self.output_proj = nn.Linear(d, cfg.embed_dim)
 
-    def forward(self, pos, rad, L, adj_np, device):
-        node_np   = np.concatenate(
-            [pos / L, (rad / rad.max()).reshape(-1, 1)], axis=1
-        ).astype(np.float32)
-        node_feat = torch.from_numpy(node_np).to(device)
-        adj       = torch.from_numpy(adj_np).to(device)
+    @staticmethod
+    def _build_node_features(pos_np, rad_np, L):
+        return np.concatenate(
+            [pos_np / L, (rad_np / rad_np.max()).reshape(-1, 1)], axis=1
+        ).astype(np.float32)   # (N, 4)
 
-        h = self.input_proj(node_feat)
-        for layer in self.gnn_layers:
-            h = layer(h, adj)
+    def forward_single(self, pos_np, rad_np, L, device):
+        """单样本推理，无 padding。返回 (embed_dim,)。"""
+        node = self._build_node_features(pos_np, rad_np, L)
+        x    = self.input_proj(torch.from_numpy(node).to(device)).unsqueeze(0)  # (1, N, d)
+        x    = torch.cat([self.cls_token, x], dim=1)                            # (1, N+1, d)
+        x    = self.encoder(x)                                                  # (1, N+1, d)
+        return self.output_proj(x[0, 0])                                        # (embed_dim,)
 
-        h_glob = torch.cat([h.max(dim=0)[0], h.mean(dim=0)], dim=-1)
-        return self.output_proj(h_glob)
+    def forward_batch(self, samples, device):
+        """批量推理，自动 padding。返回 (B, embed_dim)。"""
+        B     = len(samples)
+        nodes = [self._build_node_features(s['graph_pos'], s['graph_rad'], s['L'])
+                 for s in samples]
+        max_n = max(n.shape[0] for n in nodes)
 
+        padded   = np.zeros((B, max_n, 4), dtype=np.float32)
+        pad_mask = torch.zeros(B, max_n, dtype=torch.bool, device=device)
+        for i, node in enumerate(nodes):
+            n = node.shape[0]
+            padded[i, :n] = node
+            pad_mask[i, n:] = True                       # padding 位置不参与 attention
 
-class FusionDecoder(nn.Module):
-    def __init__(self, cfg: Config):
-        super().__init__()
-        layers = []
-        in_dim = cfg.embed_dim * 2
-        for out_dim in cfg.fusion_layers:
-            layers += [nn.Linear(in_dim, out_dim), nn.ReLU()]
-            in_dim = out_dim
-        layers.append(nn.Linear(in_dim, 1))
-        self.net = nn.Sequential(*layers)
+        x    = self.input_proj(torch.from_numpy(padded).to(device))   # (B, max_n, d)
+        cls  = self.cls_token.expand(B, -1, -1)                       # (B, 1, d)
+        x    = torch.cat([cls, x], dim=1)                             # (B, max_n+1, d)
 
-    def forward(self, cand_emb, graph_emb):
-        n_cands  = cand_emb.size(1)
-        g_exp    = graph_emb.unsqueeze(1).expand(-1, n_cands, -1)
-        combined = torch.cat([cand_emb, g_exp], dim=-1)
-        return self.net(combined).squeeze(-1)
+        # CLS 位置不屏蔽
+        cls_mask  = torch.zeros(B, 1, dtype=torch.bool, device=device)
+        full_mask = torch.cat([cls_mask, pad_mask], dim=1)            # (B, max_n+1)
+
+        x = self.encoder(x, src_key_padding_mask=full_mask)           # (B, max_n+1, d)
+        return self.output_proj(x[:, 0])                              # (B, embed_dim)
 
 
 class PackingPolicy(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
-        self.cand_encoder  = CandidateEncoder(cfg)
-        self.graph_encoder = GraphEncoder(cfg)
-        self.fusion        = FusionDecoder(cfg)
+        self.cfg                  = cfg
+        self.cand_encoder         = CandidateEncoder(cfg)
+        self.particle_transformer = ParticleTransformer(cfg)
 
-    def forward(self, cand_feat, graph_pos, graph_rad, L, adj_np, mask):
+    def forward(self, cand_feat, graph_pos, graph_rad, L, mask):
+        """单步推理（采集时调用）。"""
         device    = cand_feat.device
-        cand_emb  = self.cand_encoder(cand_feat)
-        graph_emb = self.graph_encoder(graph_pos, graph_rad, L, adj_np, device).unsqueeze(0)
-        scores    = self.fusion(cand_emb, graph_emb)
+        cand_emb  = self.cand_encoder(cand_feat)                                          # (1, 1000, 128)
+        state_emb = self.particle_transformer.forward_single(graph_pos, graph_rad, L, device)  # (128,)
+        scores    = (cand_emb * state_emb).sum(-1)                                        # (1, 1000)
         return scores.masked_fill(mask == 0, float('-inf'))
 
     def batch_forward(self, obs_batch, mask_batch, samples, device):
-        cand_emb = self.cand_encoder(obs_batch)
-
-        graph_embs = []
-        for s in samples:
-            g = self.graph_encoder(s['graph_pos'], s['graph_rad'],
-                                   s['L'], s['adj_np'], device)
-            graph_embs.append(g)
-        graph_emb_batch = torch.stack(graph_embs)
-
-        scores = self.fusion(cand_emb, graph_emb_batch)
+        """批量训练前向。"""
+        cand_emb  = self.cand_encoder(obs_batch)                              # (B, 1000, 128)
+        state_emb = self.particle_transformer.forward_batch(samples, device)  # (B, 128)
+        scores    = (cand_emb * state_emb.unsqueeze(1)).sum(-1)               # (B, 1000)
         return scores.masked_fill(mask_batch == 0, float('-inf'))

@@ -74,7 +74,7 @@ class Trainer:
                     dtype=torch.float32, device=device)
 
                 scores    = policy.batch_forward(obs_batch, mask_batch, mb, device)
-                log_probs = torch.nn.functional.log_softmax(scores, dim=-1)
+                log_probs = torch.nn.functional.log_softmax(scores / cfg.temperature, dim=-1)
                 log_pa    = log_probs.gather(1, actions.unsqueeze(1)).squeeze(1)
 
                 batch_loss = -(log_pa * advantages).mean()

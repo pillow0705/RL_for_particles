@@ -12,21 +12,19 @@ class Config:
     diameters      = np.arange(0.7, 1.40, 0.05)
     max_candidates = 1000
     collision_tol  = 0.0
-    edge_tol       = 0.05
+    edge_tol       = 0.05   # 评测时计算配位数用
     max_particles  = 200
 
-    # ---- 候选点编码器 (左侧 MLP) ----
+    # ---- 候选点编码器 (MLP) ----
     candidate_input_dim  = 5
     candidate_mlp_layers = [32, 64, 128]
 
-    # ---- 图编码器 (右侧 GNN) ----
-    graph_input_dim  = 4
-    graph_hidden_dim = 128
-    gnn_layers       = 3
-
-    # ---- 融合解码器 ----
-    embed_dim     = 128
-    fusion_layers = [256, 128]
+    # ---- 粒子 Transformer 编码器 ----
+    embed_dim            = 128   # 输出嵌入维度（与候选点编码器对齐，用于点积）
+    transformer_d_model  = 128   # Transformer 内部宽度
+    transformer_nhead    = 4     # 注意力头数
+    transformer_layers   = 3     # Encoder 层数
+    transformer_ffn_dim  = 256   # FFN 隐层宽度
 
     # ---- 训练超参数 ----
     num_workers      = 8
@@ -41,9 +39,8 @@ class Config:
     # ---- 输出 ----
     log_file      = "v7.0_train_log.csv"
     ckpt_prefix   = "construct_v7.0"
-    save_interval = 5
-    save_data     = True   # 是否将每轮轨迹数据保存到 data/
-    rollback_tol  = 0.01  # phi_max 下降超过此值时回滚模型并缩小 lr
+    save_data     = True
+    rollback_tol  = 0.01
 
     # ---- 评测 ----
     eval_episodes    = 20

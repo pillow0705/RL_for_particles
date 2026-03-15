@@ -38,11 +38,6 @@ class ConstructEnv:
         self.current_candidates = []
         self._last_cand_stats   = {}
 
-        self._adj_np = self._full_adj(
-            np.array(self.pos, dtype=np.float64),
-            np.array(self.rad, dtype=np.float64)
-        )
-
         # 候选点集合 & 三元组集合
         self._candidate_set    = {}   # cand_id -> feat[5]
         self._triplet_set      = {}   # (i,j,k) -> set of cand_id
@@ -51,31 +46,6 @@ class ConstructEnv:
 
         self._init_sets()
         return self._get_obs()
-
-    # ------------------------------------------------------------------
-    # 邻接矩阵
-    # ------------------------------------------------------------------
-    def _full_adj(self, pos, rad):
-        diff = pos[:, None, :] - pos[None, :, :]
-        diff -= np.round(diff / self.L) * self.L
-        dist = np.linalg.norm(diff, axis=-1)
-        adj  = (dist <= rad[:, None] + rad[None, :] + self.cfg.edge_tol).astype(np.float32)
-        np.fill_diagonal(adj, 0)
-        return adj
-
-    def _update_adj_incremental(self, new_pos, new_rad):
-        old_pos = np.array(self.pos[:-1], dtype=np.float64)
-        old_rad = np.array(self.rad[:-1], dtype=np.float64)
-        diff    = old_pos - new_pos[None, :]
-        diff   -= np.round(diff / self.L) * self.L
-        dists   = np.linalg.norm(diff, axis=-1)
-        touch   = (dists <= old_rad + new_rad + self.cfg.edge_tol).astype(np.float32)
-        N       = len(touch)
-        new_adj = np.zeros((N + 1, N + 1), dtype=np.float32)
-        new_adj[:N, :N] = self._adj_np
-        new_adj[:N, N]  = touch
-        new_adj[N, :N]  = touch
-        self._adj_np    = new_adj
 
     # ------------------------------------------------------------------
     # 候选点集合增量维护
@@ -155,9 +125,9 @@ class ConstructEnv:
         return list(self._candidate_set.values())
 
     def get_graph_data(self):
+        """返回当前已放置粒子的坐标和半径（供 Transformer 编码）。"""
         return (np.array(self.pos, dtype=np.float64),
-                np.array(self.rad, dtype=np.float64),
-                self._adj_np.copy())
+                np.array(self.rad, dtype=np.float64))
 
     def _get_obs(self):
         cfg   = self.cfg
@@ -206,8 +176,6 @@ class ConstructEnv:
         self.pos.append(pos_new)
         self.rad.append(r_new)
         self.n += 1
-
-        self._update_adj_incremental(pos_new, r_new)
 
         n_before_filter = len(self._candidate_set)
         self._filter_candidates(pos_new, r_new)

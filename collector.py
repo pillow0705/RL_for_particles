@@ -27,7 +27,7 @@ def _worker_collect_episode(args):
     done = False
 
     while not done:
-        graph_pos, graph_rad, adj_np = env.get_graph_data()
+        graph_pos, graph_rad = env.get_graph_data()
         obs_t  = torch.from_numpy(obs).unsqueeze(0)
         mask_t = torch.from_numpy(mask).unsqueeze(0)
 
@@ -38,7 +38,7 @@ def _worker_collect_episode(args):
             action_idx = int(np.random.choice(valid_idx))
         else:
             with torch.no_grad():
-                scores = policy(obs_t, graph_pos, graph_rad, env.L, adj_np, mask_t)
+                scores = policy(obs_t, graph_pos, graph_rad, env.L, mask_t)
             scores_np = scores[0].numpy()
             valid_idx = np.where(mask > 0)[0]
             if len(valid_idx) == 0:
@@ -60,7 +60,6 @@ def _worker_collect_episode(args):
             'mask'      : mask,
             'graph_pos' : graph_pos.copy(),
             'graph_rad' : graph_rad.copy(),
-            'adj_np'    : adj_np,
             'L'         : env.L,
             'action'    : action_idx,
             'reward'    : reward,
