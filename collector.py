@@ -9,6 +9,7 @@ from env import ConstructEnv
 
 def _worker_collect_episode(args):
     policy_state_dict, greedy, temperature, seed = args
+    torch.set_num_threads(1)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
