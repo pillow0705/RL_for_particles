@@ -63,6 +63,8 @@ diameters 设计方向（最有潜力的探索维度）：
 
 物理常识：直径比越大，小球越容易填进大球间隙，理论 phi 上限越高，但需要更高 temperature。
 
+小球嵌入大球的临界比值为 0.414（小球直径/大球直径）。大于和小于这个阈值是两种不同的物理机制，需要分开讨论和研究，两类实验都值得探索。
+
 不要改的参数：
 max_candidates=1000, max_particles=200, target_N=100, target_phi=0.72, collision_tol=0.05, embed_dim, transformer_*
 
@@ -103,16 +105,32 @@ git push origin master
 ---
 当前已知最优配置（参考基准）
 
-temperature=3.0, samples_per_iter=50, train_epochs=2,
+【最优】三峰配置：
+temperature=5.0, samples_per_iter=50, train_epochs=2,
 lr=5e-4, advantage_filter_ratio=0.5,
-diameters=np.arange(0.7, 1.50, 0.05), num_workers=10
-phi_max 历史最优：0.6835
+diameters=np.array([0.5, 0.9, 1.4]), num_workers=20
+phi_max 历史最优：0.7281（iter10），评测 phi_mean=0.7119
+
+【旧基准·已超越】多分散配置：
+temperature=3.0, diameters=np.arange(0.7, 1.50, 0.05)
+phi_max 天花板：≈0.697
 
 ---
 探索优先级
-注意各种epoach的轮数 注意temperature的调整 注意采集样本量的调整 注意不要轻易开非常长的实验 可以先做冒烟测试 如果效果不错 我们就投入资源更细致的探索这个方向
+注意各种epoch的轮数 注意temperature的调整 注意采集样本量的调整 注意不要轻易开非常长的实验 可以先做冒烟测试 如果效果不错 我们就投入资源更细致的探索这个方向
 
 发现超过 0.70 的配置立刻汇报并重点投入资源。
+
+适时安排一组多分散配置 np.arange(0.7, 1.35, 0.05) 的 smoke test（20轮），与三峰结果对比，不需要长期跑。
+
+**当前已知最优（更新）**：
+- 三峰[0.5,0.9,1.4] T=5.0：phi_max=0.7281，phi_mean=0.7119，评测phi_min=0.7055（全>0.70）
+- 多分散T=3.0天花板：phi_max≈0.697（已超越）
+
+---
+S2 服务器排查
+
+每次 loop 检查 S2 采样/训练时间是否正常（正常应 <200s/iter）。若异常，排查原因：检查 CPU 占用、内存/swap、残留 python 进程数，找到根因后解决，不要只是重启了事。
 
 ---
 把以上全部内容复制到 /loop 15m 后面即可。
