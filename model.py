@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from config import Config
+from physics import get_pbc_center_of_mass
 
 
 class CandidateEncoder(nn.Module):
@@ -41,8 +42,12 @@ class ParticleTransformer(nn.Module):
 
     @staticmethod
     def _build_node_features(pos_np, rad_np, L):
+        center = get_pbc_center_of_mass(pos_np, L)
+        rel    = pos_np - center
+        rel    = rel - np.round(rel / L) * L   # PBC wrap
+        rel    = rel * 0.5                      # 与候选点坐标缩放一致
         return np.concatenate(
-            [pos_np / L, (rad_np / rad_np.max()).reshape(-1, 1)], axis=1
+            [rel, (rad_np / rad_np.max()).reshape(-1, 1)], axis=1
         ).astype(np.float32)   # (N, 4)
 
     def forward_single(self, pos_np, rad_np, L, device):
