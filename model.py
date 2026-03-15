@@ -30,6 +30,7 @@ class ParticleTransformer(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
         d = cfg.transformer_d_model
+        self.r_max      = float(cfg.diameters.max() / 2)   # 全局最大半径，归一化用
         self.input_proj = nn.Sequential(nn.Linear(4, d), nn.ReLU())
         self.cls_token  = nn.Parameter(torch.zeros(1, 1, d))
         encoder_layer   = nn.TransformerEncoderLayer(
@@ -40,14 +41,13 @@ class ParticleTransformer(nn.Module):
         self.encoder     = nn.TransformerEncoder(encoder_layer, num_layers=cfg.transformer_layers)
         self.output_proj = nn.Linear(d, cfg.embed_dim)
 
-    @staticmethod
-    def _build_node_features(pos_np, rad_np, L):
+    def _build_node_features(self, pos_np, rad_np, L):
         center = get_pbc_center_of_mass(pos_np, L)
         rel    = pos_np - center
         rel    = rel - np.round(rel / L) * L   # PBC wrap
         rel    = rel * 0.5                      # 与候选点坐标缩放一致
         return np.concatenate(
-            [rel, (rad_np / rad_np.max()).reshape(-1, 1)], axis=1
+            [rel, (rad_np / self.r_max).reshape(-1, 1)], axis=1
         ).astype(np.float32)   # (N, 4)
 
     def forward_single(self, pos_np, rad_np, L, device):
