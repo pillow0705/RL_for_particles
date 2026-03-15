@@ -42,6 +42,7 @@ class Config:
     log_file      = "v7.0_train_log.csv"
     ckpt_prefix   = "construct_v7.0"
     save_interval = 5
+    save_data     = True   # 是否将每轮轨迹数据保存到 data/
 
     # ---- 评测 ----
     eval_episodes    = 20

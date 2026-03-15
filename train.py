@@ -70,8 +70,9 @@ def train():
             print(f"  phi: mean={phi_mean:.4f}  max={phi_max:.4f}  "
                   f"min={phi_min:.4f}  avg_steps={avg_steps:.1f}")
 
-            data_file = save_trajectories(trajs, exp_dir, iteration + 1)
-            print(f"  数据已保存: {data_file}")
+            if cfg.save_data:
+                data_file = save_trajectories(trajs, exp_dir, iteration + 1)
+                print(f"  数据已保存: {data_file}")
 
             all_cs       = [s['cand_stats'] for t in trajs for s in t['steps']]
             avg_before   = np.mean([c['n_before']   for c in all_cs])
