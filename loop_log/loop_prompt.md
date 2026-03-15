@@ -33,14 +33,14 @@
 ---
 启动实验的方法
 
-每个实验组独立一个目录，修改其中的 config.py 后用 nohup 后台运行：
+直接在 RL_for_particles 目录中修改 config.py，然后启动：
 
-cd ~/rl_workspace
-cp -r RL_for_particles exp_X
-cd exp_X
+cd ~/rl_workspace/RL_for_particles
 # 修改 config.py 中的参数
-nohup ~/rl_workspace/RL_for_particles/venv/bin/python3 train.py > /tmp/exp_X.log 2>&1 &
+ulimit -n 65536 && nohup venv/bin/python3 train.py > /tmp/exp.log 2>&1 &
 echo $!
+
+每次运行会自动在 experiments/<timestamp>/ 下创建新目录保存结果，无需手动建文件夹。
 
 ---
 Config 参数设计注意事项
@@ -72,8 +72,8 @@ max_candidates=1000, max_particles=200, target_N=100, target_phi=0.72, collision
 1. 检查所有实验状态
 
 ps aux | grep python3 | grep train
-tail -20 /tmp/exp_X.log
-cat ~/rl_workspace/exp_X/experiments/*/train_log.csv
+tail -20 /tmp/exp.log
+cat ~/rl_workspace/RL_for_particles/experiments/*/train_log.csv
 
 2. 决策规则
 
