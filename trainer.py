@@ -12,6 +12,23 @@ class Trainer:
         self.policy    = policy
         self.cfg       = cfg
         self.optimizer = optim.Adam(policy.parameters(), lr=cfg.lr)
+        self._ckpt     = None   # 上一轮训练前的权重备份
+
+    def backup(self):
+        """训练前备份当前权重。"""
+        self._ckpt = {k: v.cpu().clone() for k, v in self.policy.state_dict().items()}
+
+    def rollback(self):
+        """回滚到上一次 backup() 时的权重，并将 lr 缩小 0.5 倍。"""
+        if self._ckpt is None:
+            return
+        self.policy.load_state_dict(self._ckpt)
+        for pg in self.optimizer.param_groups:
+            pg['lr'] *= 0.5
+        print(f"  [回滚] 模型已恢复，lr 调整为 {self.optimizer.param_groups[0]['lr']:.2e}")
+
+    def current_lr(self) -> float:
+        return self.optimizer.param_groups[0]['lr']
 
     def _compute_returns(self, traj):
         phi = traj['phi_final']

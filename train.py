@@ -51,12 +51,13 @@ def train():
                          "AvgSteps", "Loss",
                          "AvgCandsBefore", "AvgFiltered", "AvgAdded", "AvgCandsAfter"])
 
-        best_phi = -1.0
+        best_phi  = -1.0
+        prev_phi_max = -1.0
 
         for iteration in range(cfg.num_iterations):
             t0 = time.time()
             print(f"\n{'='*60}")
-            print(f"迭代 {iteration+1}/{cfg.num_iterations}")
+            print(f"迭代 {iteration+1}/{cfg.num_iterations}  lr={trainer.current_lr():.2e}")
 
             use_policy = None if iteration == 0 else policy
             print(f"  采集 {cfg.samples_per_iter} 个样本 "
@@ -85,9 +86,17 @@ def train():
                   f"filtered={avg_filtered:.1f}  added={avg_added:.1f}  "
                   f"after={avg_after:.1f}")
 
+            # 退步检测：回滚并缩小 lr，然后重新训练
+            if prev_phi_max > 0 and phi_max < prev_phi_max - cfg.rollback_tol:
+                print(f"  [退步] phi_max {phi_max:.4f} < {prev_phi_max:.4f} - {cfg.rollback_tol}")
+                trainer.rollback()
+
+            trainer.backup()
             print(f"  训练 {cfg.train_epochs} epoch ...")
             loss = trainer.train(trajs)
             print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
+
+            prev_phi_max = phi_max
 
             writer.writerow([iteration + 1, phi_mean, phi_max, phi_min,
                              avg_steps, loss,

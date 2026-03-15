@@ -43,6 +43,7 @@ class Config:
     ckpt_prefix   = "construct_v7.0"
     save_interval = 5
     save_data     = True   # 是否将每轮轨迹数据保存到 data/
+    rollback_tol  = 0.01  # phi_max 下降超过此值时回滚模型并缩小 lr
 
     # ---- 评测 ----
     eval_episodes    = 20
