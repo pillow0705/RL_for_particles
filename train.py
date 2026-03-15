@@ -89,17 +89,22 @@ def train():
                   f"filtered={avg_filtered:.1f}  added={avg_added:.1f}  "
                   f"after={avg_after:.1f}")
 
-            # 退步检测：回滚并缩小 lr，然后重新训练
+            # 退步检测：回滚后跳过本轮训练，用恢复的模型重新采集
+            rolled_back = False
             if prev_phi_max > 0 and phi_max < prev_phi_max - cfg.rollback_tol:
                 print(f"  [退步] phi_max {phi_max:.4f} < {prev_phi_max:.4f} - {cfg.rollback_tol}")
                 trainer.rollback()
+                rolled_back = True
 
-            print(f"  训练 {cfg.train_epochs} epoch ...")
-            loss = trainer.train(trajs)
-            trainer.backup()   # 训练完成后备份，供下轮可能的回滚使用
-            print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
-
-            prev_phi_max = phi_max
+            if not rolled_back:
+                print(f"  训练 {cfg.train_epochs} epoch ...")
+                loss = trainer.train(trajs)
+                trainer.backup()   # 训练完成后备份，供下轮可能的回滚使用
+                print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
+                prev_phi_max = phi_max   # 只在正常训练后更新基准
+            else:
+                loss = float('nan')
+                print(f"  [跳过训练] 耗时={time.time()-t0:.1f}s  下轮用恢复的模型重新采集")
 
             writer.writerow([iteration + 1, phi_mean, phi_max, phi_min,
                              avg_steps, loss,
