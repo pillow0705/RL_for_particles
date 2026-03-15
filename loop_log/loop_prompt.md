@@ -81,8 +81,9 @@ cat ~/rl_workspace/exp_X/experiments/*/train_log.csv
 
 3. 资源分配
 
-- 每台同时跑 4 组，每组 num_workers=10，合计 40 核
-- 好的方向多开几组，差的方向快速淘汰
+- 每台同时跑 1 组，num_workers=20，ulimit -n 65536 启动防止文件句柄不足
+- 一个实验跑完后立刻启动下一个，不要让核闲着
+- 好的方向优先安排，每个方向都跑完再评估
 
 4. 记录
 
