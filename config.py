@@ -7,11 +7,8 @@ class Config:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ---- 物理 / 环境参数 ----
-    target_N       = 50
+    target_N       = 100
     target_phi     = 0.72
-    diam_min       = 0.7
-    diam_max       = 1.35
-    diam_step      = 0.05
     diameters      = np.arange(0.7, 1.40, 0.05)
     max_candidates = 1000
     collision_tol  = 0.0
@@ -47,7 +44,7 @@ class Config:
     save_interval = 5
 
     # ---- 评测 ----
-    eval_episodes    = 30
+    eval_episodes    = 20
     eval_temperature = 1.0
     eval_report_file = "v7.0_eval_report.txt"
     eval_conf_file   = "v7.0_best_packing.conf"
