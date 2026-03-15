@@ -15,7 +15,7 @@ from config import Config
 from model import PackingPolicy
 from collector import DataCollector
 from trainer import Trainer
-from utils import _Tee, create_experiment_dir, save_config
+from utils import _Tee, create_experiment_dir, save_config, save_trajectories
 
 
 # =====================================================================
@@ -69,6 +69,9 @@ def train():
             avg_steps = np.mean(steps_cnt)
             print(f"  phi: mean={phi_mean:.4f}  max={phi_max:.4f}  "
                   f"min={phi_min:.4f}  avg_steps={avg_steps:.1f}")
+
+            data_file = save_trajectories(trajs, exp_dir, iteration + 1)
+            print(f"  数据已保存: {data_file}")
 
             all_cs       = [s['cand_stats'] for t in trajs for s in t['steps']]
             avg_before   = np.mean([c['n_before']   for c in all_cs])
@@ -215,6 +218,62 @@ def generate_packing(model_path, output_file="final_packing_v7.conf"):
         for p, r in zip(traj['final_pos'], traj['final_rad']):
             f.write(f"{p[0]:.6f} {p[1]:.6f} {p[2]:.6f} {r:.6f}\n")
         f.write(f"{traj['L']:.6f} {traj['L']:.6f} {traj['L']:.6f}\n")
+
+
+# =====================================================================
+# 从历史数据训练（无需重新采集）
+# =====================================================================
+def train_from_data():
+    """加载 data/ 下所有历史轨迹，直接进行训练。"""
+    from utils import load_all_trajectories
+
+    cfg    = Config()
+    device = cfg.device
+
+    exp_dir = create_experiment_dir()
+    save_config(exp_dir)
+
+    cfg.log_file         = str(exp_dir / "train_log.csv")
+    cfg.ckpt_prefix      = str(exp_dir / "construct_v7.0")
+    cfg.eval_report_file = str(exp_dir / "eval_report.txt")
+    cfg.eval_conf_file   = str(exp_dir / "best_packing.conf")
+
+    log_txt    = open(exp_dir / "run.log", 'w', encoding='utf-8')
+    sys.stdout = _Tee(sys.__stdout__, log_txt)
+
+    try:
+        print(f"[train_from_data] 实验目录: {exp_dir}")
+        print(f"使用设备: {device}")
+
+        print("\n加载历史轨迹数据...")
+        all_trajs = load_all_trajectories()
+        if not all_trajs:
+            print("没有可用数据，退出。")
+            return
+
+        policy  = PackingPolicy(cfg).to(device)
+        trainer = Trainer(policy, cfg)
+
+        log_f  = open(cfg.log_file, 'w', newline='')
+        writer = csv.writer(log_f)
+        writer.writerow(["Epoch", "Loss"])
+
+        for epoch in range(cfg.train_epochs):
+            loss = trainer.train(all_trajs)
+            print(f"  epoch {epoch+1}/{cfg.train_epochs}  loss={loss:.4f}")
+            writer.writerow([epoch + 1, loss])
+            log_f.flush()
+
+        log_f.close()
+        final_ckpt = f"{cfg.ckpt_prefix}_from_data.pth"
+        torch.save(policy.state_dict(), final_ckpt)
+        print(f"\n训练完成！模型已保存至 {final_ckpt}")
+
+        evaluate(policy, cfg)
+
+    finally:
+        sys.stdout = sys.__stdout__
+        log_txt.close()
 
 
 # =====================================================================

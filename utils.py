@@ -1,11 +1,15 @@
+import datetime
 import json
 import pathlib
+import pickle
 import sys
 
 import numpy as np
 import torch
 
 from config import Config
+
+DATA_DIR = pathlib.Path("data")
 
 
 class _Tee:
@@ -50,3 +54,50 @@ def save_config(exp_dir: pathlib.Path):
             d[k] = v
     with open(exp_dir / "config.json", 'w', encoding='utf-8') as f:
         json.dump(d, f, indent=2, ensure_ascii=False)
+
+
+# =====================================================================
+# 轨迹数据持久化
+# =====================================================================
+def save_trajectories(trajectories: list, run_dir: pathlib.Path, iteration: int):
+    """
+    将本轮采集的轨迹追加保存到 data/ 目录。
+    文件名: data/{run_name}_iter{NNN}.pkl
+    每个文件携带时间戳和来源信息，可独立读取。
+    """
+    DATA_DIR.mkdir(exist_ok=True)
+    filename = DATA_DIR / f"{run_dir.name}_iter{iteration:03d}.pkl"
+    payload  = {
+        'timestamp'   : datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'run_dir'     : str(run_dir),
+        'iteration'   : iteration,
+        'trajectories': trajectories,
+    }
+    with open(filename, 'wb') as f:
+        pickle.dump(payload, f)
+    return filename
+
+
+def load_all_trajectories(data_dir: pathlib.Path = DATA_DIR) -> list:
+    """
+    加载 data/ 下所有 .pkl 文件，合并为一个轨迹列表。
+    按文件名（即时间顺序）排序，打印每个文件的来源和数量。
+    """
+    files = sorted(data_dir.glob("*.pkl"))
+    if not files:
+        print(f"[data] {data_dir} 下没有找到任何轨迹文件。")
+        return []
+
+    all_trajs = []
+    for f in files:
+        with open(f, 'rb') as fp:
+            payload = pickle.load(fp)
+        trajs = payload['trajectories']
+        print(f"  [data] {f.name}  "
+              f"时间={payload['timestamp']}  "
+              f"轨迹数={len(trajs)}  "
+              f"phi_mean={np.mean([t['phi_final'] for t in trajs]):.4f}")
+        all_trajs.extend(trajs)
+
+    print(f"  [data] 共加载 {len(all_trajs)} 条轨迹（来自 {len(files)} 个文件）")
+    return all_trajs
