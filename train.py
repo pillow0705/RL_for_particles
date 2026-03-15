@@ -91,9 +91,9 @@ def train():
                 print(f"  [退步] phi_max {phi_max:.4f} < {prev_phi_max:.4f} - {cfg.rollback_tol}")
                 trainer.rollback()
 
-            trainer.backup()
             print(f"  训练 {cfg.train_epochs} epoch ...")
             loss = trainer.train(trajs)
+            trainer.backup()   # 训练完成后备份，供下轮可能的回滚使用
             print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
 
             prev_phi_max = phi_max
@@ -212,28 +212,6 @@ def evaluate(policy: PackingPolicy, cfg: Config):
 
 # =====================================================================
 # 独立生成（加载已有模型）
-# =====================================================================
-def generate_packing(model_path, output_file="final_packing_v7.conf"):
-    cfg    = Config()
-    device = cfg.device
-
-    policy = PackingPolicy(cfg).to(device)
-    policy.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-    policy.eval()
-
-    collector = DataCollector(cfg)
-    trajs     = collector.collect(policy, n_samples=1, greedy=True)
-    traj      = trajs[0]
-
-    phi = traj['phi_final']
-    print(f"生成完成  粒子数={len(traj['final_pos'])}  phi={phi:.4f}")
-
-    with open(output_file, 'w') as f:
-        for p, r in zip(traj['final_pos'], traj['final_rad']):
-            f.write(f"{p[0]:.6f} {p[1]:.6f} {p[2]:.6f} {r:.6f}\n")
-        f.write(f"{traj['L']:.6f} {traj['L']:.6f} {traj['L']:.6f}\n")
-
-
 # =====================================================================
 # 从历史数据训练（无需重新采集）
 # =====================================================================

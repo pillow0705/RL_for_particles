@@ -112,9 +112,9 @@ def resume():
                 print(f"  [退步] phi_max {phi_max:.4f} < {prev_phi_max:.4f} - {cfg.rollback_tol}")
                 trainer.rollback()
 
-            trainer.backup()
             print(f"  训练 {cfg.train_epochs} epoch ...")
             loss = trainer.train(trajs)
+            trainer.backup()   # 训练完成后备份，供下轮可能的回滚使用
             print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
 
             prev_phi_max = phi_max
