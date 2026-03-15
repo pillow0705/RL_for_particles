@@ -18,12 +18,23 @@ Iterative REINFORCE (no Critic):
 3. Use trained model to collect better data
 4. Repeat
 
-## Files
+## File Structure
 
-| File | Description |
-|---|---|
-| `RL_Construct_v7.0.py` | Main training code (current version) |
-| `RL_Construct_test5.2.py` | Previous version (PPO + PointNet) |
+```
+config.py      # All hyperparameters (Config class)
+physics.py     # Numba JIT physics core (three-sphere solver, collision check)
+model.py       # Neural network (CandidateEncoder + GraphEncoder + FusionDecoder)
+env.py         # ConstructEnv — incremental candidate set maintenance
+collector.py   # DataCollector + multiprocess worker
+trainer.py     # REINFORCE Trainer
+utils.py       # Experiment dir creation, config saving, Tee logger
+train.py       # Main entry point (train / evaluate / generate_packing)
+scripts/
+  upload.sh    # Linux/macOS: commit & push to GitHub
+  upload.ps1   # Windows:     commit & push to GitHub
+  update.sh    # Linux/macOS: pull latest from GitHub
+  update.ps1   # Windows:     pull latest from GitHub
+```
 
 ## Quick Start
 
@@ -31,10 +42,26 @@ Iterative REINFORCE (no Critic):
 pip install torch numba numpy
 
 # Run training (auto-selects GPU if available)
-python RL_Construct_v7.0.py
+python train.py
 
 # Specify GPU
-CUDA_VISIBLE_DEVICES=0 python RL_Construct_v7.0.py
+CUDA_VISIBLE_DEVICES=0 python train.py
+```
+
+## Sync with GitHub
+
+```bash
+# Upload (Linux/macOS)
+bash scripts/upload.sh "your commit message"
+
+# Upload (Windows PowerShell)
+.\scripts\upload.ps1 "your commit message"
+
+# Update from remote (Linux/macOS)
+bash scripts/update.sh
+
+# Update from remote (Windows PowerShell)
+.\scripts\update.ps1
 ```
 
 ## Output Structure
