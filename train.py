@@ -51,7 +51,7 @@ def train():
         log_f  = open(cfg.log_file, 'w', newline='')
         writer = csv.writer(log_f)
         writer.writerow(["Iteration", "PhiMean", "PhiMax", "PhiMin",
-                         "AvgSteps", "Loss",
+                         "AvgSteps", "Loss", "AdvVar",
                          "AvgCandsBefore", "AvgFiltered", "AvgAdded", "AvgCandsAfter"])
 
         best_phi  = -1.0
@@ -98,16 +98,16 @@ def train():
 
             if not rolled_back:
                 print(f"  训练 {cfg.train_epochs} epoch ...")
-                loss = trainer.train(trajs)
+                loss, adv_var = trainer.train(trajs)
                 trainer.backup()   # 训练完成后备份，供下轮可能的回滚使用
-                print(f"  loss={loss:.4f}  耗时={time.time()-t0:.1f}s")
+                print(f"  loss={loss:.4f}  adv_var={adv_var:.4f}  耗时={time.time()-t0:.1f}s")
                 prev_phi_max = phi_max   # 只在正常训练后更新基准
             else:
-                loss = float('nan')
+                loss, adv_var = float('nan'), float('nan')
                 print(f"  [跳过训练] 耗时={time.time()-t0:.1f}s  下轮用恢复的模型重新采集")
 
             writer.writerow([iteration + 1, phi_mean, phi_max, phi_min,
-                             avg_steps, loss,
+                             avg_steps, loss, round(adv_var, 4),
                              round(avg_before, 2), round(avg_filtered, 2),
                              round(avg_added, 2),  round(avg_after, 2)])
             log_f.flush()
@@ -256,12 +256,12 @@ def train_from_data():
 
         log_f  = open(cfg.log_file, 'w', newline='')
         writer = csv.writer(log_f)
-        writer.writerow(["Epoch", "Loss"])
+        writer.writerow(["Epoch", "Loss", "AdvVar"])
 
         for epoch in range(cfg.train_epochs):
-            loss = trainer.train(all_trajs)
-            print(f"  epoch {epoch+1}/{cfg.train_epochs}  loss={loss:.4f}")
-            writer.writerow([epoch + 1, loss])
+            loss, adv_var = trainer.train(all_trajs)
+            print(f"  epoch {epoch+1}/{cfg.train_epochs}  loss={loss:.4f}  adv_var={adv_var:.4f}")
+            writer.writerow([epoch + 1, loss, round(adv_var, 4)])
             log_f.flush()
 
         log_f.close()

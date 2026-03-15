@@ -58,7 +58,11 @@ class Trainer:
             threshold = np.quantile(norm_adv, cfg.advantage_filter_ratio)
             all_samples = [s for s, a in zip(all_samples, norm_adv) if a >= threshold]
             if len(all_samples) == 0:
-                return 0.0
+                return 0.0, 0.0
+
+        # 过滤后剩余样本的归一化 advantage 方差（衡量梯度信号强度）
+        filtered_adv = np.array([(s['return'] - ret_mean) / ret_std for s in all_samples])
+        adv_var = float(np.var(filtered_adv))
 
         total_loss = 0.0
         n_updates  = 0
@@ -94,4 +98,4 @@ class Trainer:
                 total_loss += batch_loss.item()
                 n_updates  += 1
 
-        return total_loss / max(n_updates, 1)
+        return total_loss / max(n_updates, 1), adv_var
