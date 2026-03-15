@@ -57,6 +57,31 @@ def save_config(exp_dir: pathlib.Path):
 
 
 # =====================================================================
+# 最优堆积保存
+# =====================================================================
+def save_best_packing(trajs: list, best_phi: float, exp_dir: pathlib.Path) -> float:
+    """
+    检查本轮轨迹中是否有超过历史最优 phi 的结果。
+    若有，保存模型权重由调用方负责；此函数负责写入堆积坐标文件。
+    返回更新后的 best_phi。
+    """
+    for traj in trajs:
+        if traj['phi_final'] > best_phi:
+            best_phi     = traj['phi_final']
+            best_pos_arr = traj['final_pos']
+            best_rad_arr = traj['final_rad']
+            best_L       = traj['L']
+
+            conf_path = exp_dir / "best_packing.conf"
+            with open(conf_path, 'w') as f:
+                for p, r in zip(best_pos_arr, best_rad_arr):
+                    f.write(f"{p[0]:.6f} {p[1]:.6f} {p[2]:.6f} {r:.6f}\n")
+                f.write(f"{best_L:.6f} {best_L:.6f} {best_L:.6f}\n")
+
+    return best_phi
+
+
+# =====================================================================
 # 轨迹数据持久化
 # =====================================================================
 def save_trajectories(trajectories: list, run_dir: pathlib.Path, iteration: int):

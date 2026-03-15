@@ -15,7 +15,7 @@ from config import Config
 from model import PackingPolicy
 from collector import DataCollector
 from trainer import Trainer
-from utils import _Tee, create_experiment_dir, save_config, save_trajectories
+from utils import _Tee, create_experiment_dir, save_config, save_trajectories, save_best_packing
 
 
 # =====================================================================
@@ -50,6 +50,8 @@ def train():
         writer.writerow(["Iteration", "PhiMean", "PhiMax", "PhiMin",
                          "AvgSteps", "Loss",
                          "AvgCandsBefore", "AvgFiltered", "AvgAdded", "AvgCandsAfter"])
+
+        best_phi = -1.0
 
         for iteration in range(cfg.num_iterations):
             t0 = time.time()
@@ -93,10 +95,12 @@ def train():
                              round(avg_added, 2),  round(avg_after, 2)])
             log_f.flush()
 
-            if (iteration + 1) % cfg.save_interval == 0:
-                ckpt = f"{cfg.ckpt_prefix}_iter{iteration+1}.pth"
+            new_best = save_best_packing(trajs, best_phi, exp_dir)
+            if new_best > best_phi:
+                best_phi = new_best
+                ckpt = f"{cfg.ckpt_prefix}_best.pth"
                 torch.save(policy.state_dict(), ckpt)
-                print(f"  已保存 checkpoint: {ckpt}")
+                print(f"  *** 新纪录！phi_max={best_phi:.4f}  已保存: {ckpt} + best_packing.conf ***")
 
         log_f.close()
         final_ckpt = f"{cfg.ckpt_prefix}_final.pth"
