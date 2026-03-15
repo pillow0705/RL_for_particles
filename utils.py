@@ -23,12 +23,12 @@ class _Tee:
 
 
 def create_experiment_dir() -> pathlib.Path:
-    """在 experiments/ 下创建下一个可用的 run_NNN 目录。"""
-    base = pathlib.Path("experiments")
+    """在 experiments/ 下以当前时间创建实验目录，格式 YYYYMMDD_HHMMSS。"""
+    import datetime
+    base    = pathlib.Path("experiments")
     base.mkdir(exist_ok=True)
-    existing = sorted(base.glob("run_*"))
-    next_id  = len(existing) + 1
-    exp_dir  = base / f"run_{next_id:03d}"
+    name    = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    exp_dir = base / name
     exp_dir.mkdir()
     return exp_dir
 
