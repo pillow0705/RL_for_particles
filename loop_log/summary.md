@@ -30,8 +30,10 @@
 | 20260316_043255 | S1 | exp_embed_048_100iter | T=5.0, 嵌入型np.array([0.4,0.8,1.4]), s=50, **lr=5e-4** | **⛔已终止** iter22 | **0.7565**(iter7) ★ | iter17 loss=-16.77崩塌，iter18+ nan，avg_cands 175→712 |
 | 20260316_053140 | S1 | exp_embed_048_lr1e4 | T=5.0, 嵌入型np.array([0.4,0.8,1.4]), s=50, **lr=1e-4** | **⛔已终止** iter10 | 0.7523(iter7) | iter8崩(loss=nan)，lr=1e-4比5e-4更早崩！lr非关键 |
 | 20260316_033423 | S2 | exp_embed_048_20iter | T=5.0, 嵌入型np.array([0.4,0.8,1.4]), OMP=1, workers=10 | **✅已完成** 20轮 | 0.7551(iter14) | eval phi_mean=0.7397,N=192.2(超填充!),全>0.72；OMP=1未崩 |
-| 20260316_060133 | S1 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **运行中** iter8/100 | **0.7578**(iter4) ★★★ | iter7 loss=nan但iter8恢复(+0.317)，avg_cands308未爆炸，OMP=1减轻崩塌 |
-| 20260316_060333 | S2 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **运行中** iter7/100 | 0.7537(iter7) | 完全健康，avg_cands=181，phi_mean=0.7397 |
+| 20260316_060133 | S1 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **⛔已终止** iter11 | **0.7578**(iter4) ★★★ | iter10-11连续nan，avg_cands爬升405→417，随机崩塌（S2同配置未崩） |
+| 20260316_060333 | S2 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **运行中** iter10/100 | 0.7530(iter10) | iter9轻微波动后iter10恢复，phi_mean=0.7389，极健康 |
+| 20260316_071633 | S1 | exp_squeeze_710_smoke | T=5.0, 纯挤压型[0.7,1.0,1.4], OMP=1, workers=10 | **✅已完成** 18轮 | 0.6776(iter18) | phi_max仅0.68，avg_steps=75（无超填充），挤压型方向排除 |
+| 20260316_～ | S1 | exp_embed_048_epochs1 | T=5.0, [0.4,0.8,1.4], OMP=1, **train_epochs=1** | **运行中** iter1/100 | - | 验证off-policy是否为崩塌根因；PID 865037 |
 
 ## 关键配置发现 ★★★
 **三峰 [0.5, 0.9, 1.4] T=5.0** 是突破性配置：
@@ -48,7 +50,7 @@
 - 极端双峰直径 < 0.5 会导致 worker 死锁，需要谨慎
 - S2 训练慢根因：worker pool cleanup 慢导致训练期间 CPU 被 24-thread workers 占用；修复：OMP_NUM_THREADS=1 启动
 - torch.set_num_threads(1) 在代码中未能生效（worker 实测仍 24 threads），必须用环境变量覆盖
-- **0.414嵌入阈值验证**：挤压型[0.6,0.9,1.4] eval phi_mean=0.6800,N=91（无超填充）vs 嵌入型[0.5,0.9,1.4] eval phi_mean=0.7105,N=132.5。嵌入效应是突破0.70的核心机制，两类机制差距约+3% phi_mean
+- **0.414嵌入阈值验证（扩展）**：挤压型 [0.6,0.9,1.4] phi_max=0.700、[0.7,1.0,1.4] phi_max=0.677，均无超填充（avg_steps=75-91）；嵌入型[0.4,0.8,1.4] phi_max=0.758、avg_steps=190（超填充×1.92）。挤压型天花板约0.68-0.70，方向已排除
 - 多分散方向天花板：eval ~0.69（arange(0.7,1.50)=0.6903，arange(0.7,1.35)=0.6660），无法竞争三峰嵌入型
 - 三峰嵌入型需要约100轮才能eval稳定>0.70；20轮eval仅0.6971（final model轻微回落）
 - **强嵌入配置崩塌规律**：S1无OMP时崩（iter9/17/8），S2 OMP=1 从未崩（20轮完成）；lr无关，根因是OMP=1使worker采集更稳定
