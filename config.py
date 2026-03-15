@@ -9,7 +9,7 @@ class Config:
     # ---- 物理 / 环境参数 ----
     target_N       = 100
     target_phi     = 0.72
-    diameters      = np.arange(0.7, 1.40, 0.05)
+    diameters      = np.arange(0.7, 1.50, 0.7)
     max_candidates = 1000
     collision_tol  = 0.05
     edge_tol       = 0.05   # 评测时计算配位数用

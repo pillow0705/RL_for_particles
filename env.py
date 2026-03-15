@@ -10,14 +10,14 @@ from physics import (pbc_diff_njit, solve_three_spheres_njit,
 class ConstructEnv:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        avg_vol   = (4.0 / 3.0) * np.pi * (0.5 ** 3)
+        avg_vol   = (4.0 / 3.0) * np.pi * ((cfg.diameters.mean()/2) ** 3)
         total_vol = cfg.target_N * avg_vol / cfg.target_phi
         self.L    = total_vol ** (1.0 / 3.0)
         self.reset()
 
     def reset(self):
         cfg = self.cfg
-        r0, r1, r2, r3 = 0.5, 0.6, 0.4, 0.5
+        r0, r1, r2, r3 = np.random.choice(cfg.diameters)/2,np.random.choice(cfg.diameters)/2,np.random.choice(cfg.diameters)/2,np.random.choice(cfg.diameters)/2
         p0 = np.array([self.L / 2, self.L / 2, self.L / 2])
         p1 = p0 + np.array([r0 + r1, 0, 0])
 
