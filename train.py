@@ -6,7 +6,10 @@ train.py — 主入口
 import csv
 import sys
 import time
+import warnings
 import multiprocessing as mp
+
+warnings.filterwarnings("ignore", category=UserWarning)
 
 import numpy as np
 import torch
