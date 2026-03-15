@@ -31,6 +31,7 @@ class Config:
     num_iterations   = 20
     samples_per_iter = 20
     train_epochs     = 5
+    advantage_filter_ratio = 0.3   # 丢弃 |advantage| 最小的 30%，保留两端信号
     batch_size       = 256
     lr               = 3e-4
     gamma            = 0.99

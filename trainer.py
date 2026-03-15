@@ -52,6 +52,14 @@ class Trainer:
         ret_mean    = all_returns.mean()
         ret_std     = all_returns.std() + 1e-8
 
+        # 丢弃归一化 advantage 绝对值最小的一部分（梯度噪声来源）
+        if cfg.advantage_filter_ratio > 0:
+            norm_adv  = np.abs((all_returns - ret_mean) / ret_std)
+            threshold = np.quantile(norm_adv, cfg.advantage_filter_ratio)
+            all_samples = [s for s, a in zip(all_samples, norm_adv) if a >= threshold]
+            if len(all_samples) == 0:
+                return 0.0
+
         total_loss = 0.0
         n_updates  = 0
 
