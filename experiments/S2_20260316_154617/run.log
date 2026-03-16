@@ -1,0 +1,205 @@
+实验目录: experiments/20260316_154617
+使用设备: cpu
+目标粒子数: 100  目标体积分数: 0.72
+
+============================================================
+迭代 1/20  lr=5.00e-04
+  采集 50 个样本 (随机策略)...
+  [采集完成] 50 条  phi: mean=0.6542  max=0.6701  min=0.6446
+  phi: mean=0.6542  max=0.6701  min=0.6446  avg_steps=117.9
+  候选点: before=355.4  filtered=27.1  added=28.0  after=356.2
+  训练 1 epoch ...
+  loss=0.8501  adv_var=1.8170  耗时=92.1s
+  *** 新纪录！phi_max=0.6701  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 2/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6596  max=0.6801  min=0.6456
+  phi: mean=0.6596  max=0.6801  min=0.6456  avg_steps=110.1
+  候选点: before=330.8  filtered=27.0  added=27.9  after=331.6
+  训练 1 epoch ...
+  loss=0.3358  adv_var=1.7915  耗时=80.0s
+  *** 新纪录！phi_max=0.6801  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 3/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6656  max=0.6860  min=0.6544
+  phi: mean=0.6656  max=0.6860  min=0.6544  avg_steps=105.7
+  候选点: before=312.0  filtered=27.4  added=28.2  after=312.9
+  训练 1 epoch ...
+  loss=-0.1190  adv_var=1.8599  耗时=67.8s
+  *** 新纪录！phi_max=0.6860  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 4/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6687  max=0.6909  min=0.6505
+  phi: mean=0.6687  max=0.6909  min=0.6505  avg_steps=105.8
+  候选点: before=308.6  filtered=27.0  added=27.8  after=309.4
+  训练 1 epoch ...
+  loss=-0.1677  adv_var=1.8873  耗时=68.2s
+  *** 新纪录！phi_max=0.6909  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 5/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6805  max=0.6912  min=0.6691
+  phi: mean=0.6805  max=0.6912  min=0.6691  avg_steps=96.5
+  候选点: before=271.9  filtered=27.5  added=28.3  after=272.6
+  训练 1 epoch ...
+  loss=0.4001  adv_var=1.7863  耗时=54.5s
+  *** 新纪录！phi_max=0.6912  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 6/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6820  max=0.6974  min=0.6706
+  phi: mean=0.6820  max=0.6974  min=0.6706  avg_steps=96.1
+  候选点: before=266.6  filtered=27.5  added=28.2  after=267.4
+  训练 1 epoch ...
+  loss=-0.2571  adv_var=1.8033  耗时=54.3s
+  *** 新纪录！phi_max=0.6974  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 7/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6901  max=0.7063  min=0.6780
+  phi: mean=0.6901  max=0.7063  min=0.6780  avg_steps=90.9
+  候选点: before=249.2  filtered=26.9  added=27.6  after=250.0
+  训练 1 epoch ...
+  loss=-0.1042  adv_var=1.7929  耗时=47.8s
+  *** 新纪录！phi_max=0.7063  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 8/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6941  max=0.7073  min=0.6803
+  phi: mean=0.6941  max=0.7073  min=0.6803  avg_steps=88.9
+  候选点: before=241.1  filtered=27.4  added=28.2  after=241.9
+  训练 1 epoch ...
+  loss=-0.3079  adv_var=1.8312  耗时=48.4s
+  *** 新纪录！phi_max=0.7073  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 9/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6964  max=0.7036  min=0.6851
+  phi: mean=0.6964  max=0.7036  min=0.6851  avg_steps=86.9
+  候选点: before=227.0  filtered=27.1  added=27.9  after=227.8
+  训练 1 epoch ...
+  loss=-0.4233  adv_var=1.7633  耗时=43.7s
+
+============================================================
+迭代 10/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6970  max=0.7091  min=0.6839
+  phi: mean=0.6970  max=0.7091  min=0.6839  avg_steps=86.4
+  候选点: before=227.0  filtered=27.0  added=27.7  after=227.8
+  训练 1 epoch ...
+  loss=-0.2017  adv_var=1.8784  耗时=45.2s
+  *** 新纪录！phi_max=0.7091  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 11/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6970  max=0.7089  min=0.6857
+  phi: mean=0.6970  max=0.7089  min=0.6857  avg_steps=86.5
+  候选点: before=224.2  filtered=26.7  added=27.4  after=225.0
+  训练 1 epoch ...
+  loss=0.1575  adv_var=1.8316  耗时=43.0s
+
+============================================================
+迭代 12/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6976  max=0.7084  min=0.6846
+  phi: mean=0.6976  max=0.7084  min=0.6846  avg_steps=86.5
+  候选点: before=223.7  filtered=26.6  added=27.4  after=224.4
+  训练 1 epoch ...
+  loss=-0.1420  adv_var=1.7700  耗时=41.9s
+
+============================================================
+迭代 13/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6975  max=0.7094  min=0.6856
+  phi: mean=0.6975  max=0.7094  min=0.6856  avg_steps=86.4
+  候选点: before=225.7  filtered=26.6  added=27.4  after=226.4
+  训练 1 epoch ...
+  loss=0.2042  adv_var=1.8093  耗时=42.0s
+  *** 新纪录！phi_max=0.7094  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 14/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6963  max=0.7073  min=0.6847
+  phi: mean=0.6963  max=0.7073  min=0.6847  avg_steps=84.0
+  候选点: before=222.0  filtered=26.7  added=27.5  after=222.8
+  训练 1 epoch ...
+  loss=0.1768  adv_var=1.7660  耗时=42.7s
+
+============================================================
+迭代 15/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6973  max=0.7100  min=0.6859
+  phi: mean=0.6973  max=0.7100  min=0.6859  avg_steps=85.5
+  候选点: before=226.0  filtered=26.7  added=27.5  after=226.8
+  训练 1 epoch ...
+  loss=-0.1667  adv_var=1.8506  耗时=46.7s
+  *** 新纪录！phi_max=0.7100  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 16/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6971  max=0.7083  min=0.6869
+  phi: mean=0.6971  max=0.7083  min=0.6869  avg_steps=85.2
+  候选点: before=225.7  filtered=26.8  added=27.6  after=226.5
+  训练 1 epoch ...
+  loss=-0.1828  adv_var=1.8556  耗时=41.2s
+
+============================================================
+迭代 17/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6976  max=0.7100  min=0.6815
+  phi: mean=0.6976  max=0.7100  min=0.6815  avg_steps=84.2
+  候选点: before=222.3  filtered=26.7  added=27.4  after=223.0
+  训练 1 epoch ...
+  loss=0.0144  adv_var=1.7664  耗时=42.5s
+  *** 新纪录！phi_max=0.7100  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+============================================================
+迭代 18/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6976  max=0.7078  min=0.6870
+  phi: mean=0.6976  max=0.7078  min=0.6870  avg_steps=84.9
+  候选点: before=221.0  filtered=26.3  added=27.1  after=221.8
+  训练 1 epoch ...
+  loss=0.0113  adv_var=1.7290  耗时=41.3s
+
+============================================================
+迭代 19/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6977  max=0.7073  min=0.6854
+  phi: mean=0.6977  max=0.7073  min=0.6854  avg_steps=84.8
+  候选点: before=219.3  filtered=26.4  added=27.2  after=220.1
+  训练 1 epoch ...
+  loss=-0.1568  adv_var=1.8631  耗时=41.2s
+
+============================================================
+迭代 20/20  lr=5.00e-04
+  采集 50 个样本 (模型策略)...
+  [采集完成] 50 条  phi: mean=0.6986  max=0.7119  min=0.6859
+  phi: mean=0.6986  max=0.7119  min=0.6859  avg_steps=83.4
+  候选点: before=219.3  filtered=26.2  added=27.0  after=220.0
+  训练 1 epoch ...
+  loss=0.1656  adv_var=1.9032  耗时=40.1s
+  *** 新纪录！phi_max=0.7119  已保存: experiments/20260316_154617/construct_v7.0_best.pth + best_packing.conf ***
+
+训练完成！最终模型已保存至 experiments/20260316_154617/construct_v7.0_final.pth
+
+============================================================
+开始评测（采样策略 T=5.0，共 20 局）...
+  [采集完成] 20 条  phi: mean=0.6963  max=0.7113  min=0.6858
+  评测完成  phi: mean=0.6963  max=0.7113  min=0.6858
+  报告已保存: experiments/20260316_154617/eval_report.txt
+  最优堆积已保存: experiments/20260316_154617/best_packing.conf  (phi=0.7113)
