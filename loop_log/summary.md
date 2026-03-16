@@ -36,13 +36,15 @@
 | 20260316_073234 | S1 | exp_embed_048_epochs1 | T=5.0, [0.4,0.8,1.4], OMP=1, train_epochs=1 | **⛔已终止** iter31 | 0.7572(iter28) | iter30 loss=-10.5→iter31 avg_cands=668毁灭性崩塌；有效29轮 |
 | 20260316_090115 | S2 | exp_embed_048_S2_epochs1_r1 | T=5.0, [0.4,0.8,1.4], OMP=1, epochs=1 | **⛔已崩** iter4 | 0.7524(iter3) | iter3 loss=-1.183预警，iter4 avg_cands=576不可逆崩 |
 | 20260316_093053 | S2 | exp_embed_048_S2_epochs1_r2 | T=5.0, [0.4,0.8,1.4], OMP=1, epochs=1 | **⛔已终止** iter18 | 0.7572(iter9) | 双阶段崩：iter14轻度(283)→iter15恢复→iter16-18中度(401)；提前终止 |
-| 20260316_104546 | S1 | exp_embed_048_S1_r4 | T=5.0, [0.4,0.8,1.4], OMP=1, train_epochs=1 | **运行中** iter30/100 | **🏆0.7621(iter17)** | iter23-24 nan后缓慢恢复中，iter30 avg_cands=230↓，phi_mean=0.735 |
+| 20260316_104546 | S1 | exp_embed_048_S1_r4 | T=5.0, [0.4,0.8,1.4], OMP=1, train_epochs=1 | **运行中** iter34/100 | **🏆0.7621(iter17)** | iter23-24 nan后缓慢恢复中，iter34 avg_cands=222↓，phi_mean=0.736 |
 | 20260316_111547 | S2 | exp_embed_048_S2_epochs1_r3 | T=5.0, [0.4,0.8,1.4], OMP=1, epochs=1 | **⛔已终止** iter5 | 0.7473(iter2) | iter3-5三连nan(avg_cands=331-337)，未自愈，终止 |
 | 20260316_114841 | S2 | exp_squeeze_065_100_150 | T=5.0, **挤压型**[0.65,1.0,1.5], OMP=1, epochs=1 | **✅已完成** 20轮 | 0.6943(iter20) | eval phi_mean=0.6774,phi_max=0.6842；avg_steps~90，无nan |
 | 20260316_121645 | S2 | exp_squeeze_050_080_120_smoke | T=5.0, **边界挤压型**[0.5,0.8,1.2] min/max=0.417 | **✅已完成** 20轮 | 0.7257(iter18) | eval phi_mean=**0.6936**,phi_max=0.7053；**挤压型eval历史最优** |
 | 20260316_124633 | S2 | exp_squeeze_050_080_120_50iter | T=5.0, **边界挤压型**[0.5,0.8,1.2], OMP=1, epochs=1 | **✅已完成** 50轮 | 0.7331(iter47) | eval phi_mean=**0.6953**,phi_max=0.7020；冻结型nan全程稳定 |
 | 20260316_133111 | S2 | exp_07_14_region_4peak | T=5.0, **[0.7,1.4]区间**四峰[0.7,0.9,1.1,1.4], OMP=1 | **✅已完成** 20轮 | 0.6811(iter13) | eval phi_mean=0.6684,phi_max=0.6798；avg_steps=72，天花板偏低 |
-| 20260316_134619 | S2 | exp_07_14_region_3peak_uniform | T=5.0, **[0.7,1.4]区间**三峰[0.7,1.05,1.4], OMP=1 | **运行中** iter3/20 | 0.644(iter2) | [0.7,1.4]区间smoke#2，min/max=0.500，三峰均匀间隔 |
+| 20260316_134619 | S2 | exp_07_14_region_3peak_uniform | T=5.0, **[0.7,1.4]区间**三峰[0.7,1.05,1.4], OMP=1 | **✅已完成** 20轮 | 0.6760(iter20) | eval phi_mean=0.6628,phi_max=0.6720；avg_steps~80，天花板~0.66 |
+| 20260316_140130 | S2 | exp_07_14_region_3peak_dense | T=5.0, **[0.7,1.4]区间**三峰偏密[0.7,0.9,1.4], OMP=1 | **运行中** iter10/20 | 0.6742(iter10) | [0.7,1.4]区间smoke#3，min/max=0.500；avg_cands=148↓收敛中 |
+| 20260316_104546 | S1 | exp_embed_048_S1_r4_iter34 | T=5.0, [0.4,0.8,1.4], OMP=1, train_epochs=1 | **运行中** iter34/100 | **🏆0.7621(iter17)** | avg_cands=222↓缓慢恢复；phi_mean=0.736稳定 |
 
 ## 关键配置发现 ★★★
 **三峰 [0.5, 0.9, 1.4] T=5.0** 是突破性配置：
