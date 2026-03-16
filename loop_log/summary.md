@@ -33,9 +33,9 @@
 | 20260316_060133 | S1 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, workers=10, lr=5e-4 | **⛔已终止** iter11 | **0.7578**(iter4) ★★★ | iter10-11连续nan，avg_cands爬升405→417，随机崩塌（S2同配置未崩） |
 | 20260316_060333 | S2 | exp_embed_048_OMP1_100iter | T=5.0, [0.4,0.8,1.4], **OMP=1**, epochs=2 | **⛔已终止** iter24 | 0.7572(iter15) | iter20+avg_cands渐升387，及时终止；稳定运行19轮(iter2-20无异常) |
 | 20260316_071633 | S1 | exp_squeeze_710_smoke | T=5.0, 纯挤压型[0.7,1.0,1.4], OMP=1, workers=10 | **✅已完成** 18轮 | 0.6776(iter18) | phi_max仅0.68，avg_steps=75（无超填充），挤压型方向排除 |
-| 20260316_073234 | S1 | exp_embed_048_epochs1 | T=5.0, [0.4,0.8,1.4], OMP=1, **train_epochs=1** | **运行中** iter25/100 | 0.7557(iter14) | 25轮稳定运行！iter11自愈后再无崩塌，phi_mean=0.739持续平台 |
+| 20260316_073234 | S1 | exp_embed_048_epochs1 | T=5.0, [0.4,0.8,1.4], OMP=1, **train_epochs=1** | **运行中** iter30/100 | 0.7572(iter28) | iter30 loss=-10.5极端预警！BrokenPipe worker异常，主进程存活，iter31待观察 |
 | 20260316_090115 | S2 | exp_embed_048_S2_epochs1_r1 | T=5.0, [0.4,0.8,1.4], OMP=1, epochs=1 | **⛔已崩** iter4 | 0.7524(iter3) | iter3 loss=-1.183预警，iter4 avg_cands=576不可逆崩 |
-| 20260316_093053 | S2 | exp_embed_048_S2_epochs1_r2 | T=5.0, [0.4,0.8,1.4], OMP=1, epochs=1 | **运行中** iter4/100 | 0.7370(iter4) | 渐进收敛(327→217)，比前两次更平稳，0.739平台期待 |
+| 20260316_093053 | S2 | exp_embed_048_S2_epochs1_r2 | T=5.0, [0.4,0.8,1.4], OMP=1, epochs=1 | **运行中** iter9/100 | 0.7572(iter9) | phi_max=0.7572匹配S2最优！avg_cands=173极低，完全健康 |
 
 ## 关键配置发现 ★★★
 **三峰 [0.5, 0.9, 1.4] T=5.0** 是突破性配置：
