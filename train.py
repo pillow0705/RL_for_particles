@@ -164,7 +164,7 @@ def evaluate(policy: PackingPolicy, cfg: Config):
                 diff = pos_arr[j] - pos_arr[i]
                 diff -= np.round(diff / L_traj) * L_traj
                 dist = np.linalg.norm(diff)
-                if dist <= rad_arr[i] + rad_arr[j] + cfg.edge_tol:
+                if dist <= (rad_arr[i] + rad_arr[j]) * (1 + cfg.edge_tol):
                     coord_counts[i] += 1
                     coord_counts[j] += 1
         z_mean = coord_counts.mean()

@@ -2,8 +2,8 @@ import numpy as np
 from itertools import combinations
 
 from config import Config
-from physics import (pbc_diff_njit, solve_three_spheres_njit,
-                     check_collision_njit, check_single_collision_njit,
+from physics import (pbc_diff, solve_three_spheres,
+                     check_collision, check_single_collision,
                      get_pbc_center_of_mass)
 
 
@@ -28,7 +28,7 @@ class ConstructEnv:
         y2  = np.sqrt(max(0.0, d02 ** 2 - x2 ** 2))
         p2  = p0 + np.array([x2, y2, 0])
 
-        valid, p3, _ = solve_three_spheres_njit(p0, r0, p1, r1, p2, r2, r3)
+        valid, p3, _ = solve_three_spheres(p0, r0, p1, r1, p2, r2, r3)
         if not valid:
             p3 = p0 + np.array([0, 0, r0 + r3])
 
@@ -43,6 +43,12 @@ class ConstructEnv:
         self._triplet_set      = {}   # (i,j,k) -> set of cand_id
         self._cand_to_triplets = {}   # cand_id -> set of (i,j,k)
         self._cand_counter     = 0
+
+        # 接触对（用于 O(N) 候选生成）
+        self.contact_pairs = set()
+        for i in range(4):
+            for j in range(i + 1, 4):
+                self.contact_pairs.add((i, j))
 
         self._init_sets()
         return self._get_obs()
@@ -63,16 +69,16 @@ class ConstructEnv:
         p_j, r_j = all_pos[j], all_rad[j]
         p_k, r_k = all_pos[k], all_rad[k]
 
-        p_j = p_i + pbc_diff_njit(p_j, p_i, self.L)
-        p_k = p_i + pbc_diff_njit(p_k, p_i, self.L)
+        p_j = p_i + pbc_diff(p_j, p_i, self.L)
+        p_k = p_i + pbc_diff(p_k, p_i, self.L)
 
         triplet_cands = set()
         for r_new in cfg.diameters / 2.0:
-            valid, sol1, sol2 = solve_three_spheres_njit(p_i, r_i, p_j, r_j, p_k, r_k, r_new)
+            valid, sol1, sol2 = solve_three_spheres(p_i, r_i, p_j, r_j, p_k, r_k, r_new)
             if not valid:
                 continue
             for sol in (sol1, sol2):
-                collision, coord = check_collision_njit(
+                collision, coord = check_collision(
                     sol, r_new, all_pos, all_rad, self.L, cfg.collision_tol)
                 if not collision:
                     cid  = self._new_cand_id()
@@ -89,23 +95,35 @@ class ConstructEnv:
             self._process_triplet(i, j, k)
 
     def _add_new_triplets(self, new_idx):
-        for j, k in combinations(range(new_idx), 2):
+        contacts = [m for m in range(new_idx)
+                    if (min(m, new_idx), max(m, new_idx)) in self.contact_pairs]
+        for j, k in combinations(contacts, 2):
             self._process_triplet(new_idx, j, k)
 
     def _filter_candidates(self, new_pos, new_rad):
+        if not self._candidate_set:
+            return
         new_pos_np = np.array(new_pos, dtype=np.float64)
-        to_delete  = []
-        for cid, feat in self._candidate_set.items():
-            sol   = feat[:3].astype(np.float64)
-            r_new = float(feat[3])
-            collision, touching = check_single_collision_njit(
-                sol, r_new, new_pos_np, new_rad, self.L, self.cfg.collision_tol)
-            if collision:
-                to_delete.append(cid)
-            elif touching:
-                feat[4] += 1
-        for cid in to_delete:
-            self._remove_candidate(cid)
+        cids  = list(self._candidate_set.keys())
+        feats = [self._candidate_set[c] for c in cids]
+        sols  = np.array([f[:3] for f in feats], dtype=np.float64)  # (M, 3)
+        r_news = np.array([float(f[3]) for f in feats])             # (M,)
+
+        diffs = sols - new_pos_np                   # (M, 3)
+        diffs -= np.round(diffs / self.L) * self.L
+        dists  = np.linalg.norm(diffs, axis=1)      # (M,)
+        r_sums = new_rad + r_news                   # (M,)
+        gaps   = dists - r_sums                     # (M,)
+        tol    = self.cfg.collision_tol
+
+        collisions = gaps < -tol * r_sums
+        touchings  = ~collisions & (gaps < tol * r_sums)
+
+        for i, cid in enumerate(cids):
+            if collisions[i]:
+                self._remove_candidate(cid)
+            elif touchings[i]:
+                self._candidate_set[cid][4] += 1
 
     def _remove_candidate(self, cid):
         if cid not in self._candidate_set:
@@ -150,7 +168,7 @@ class ConstructEnv:
             center   = get_pbc_center_of_mass(np.array(self.pos), self.L)
             c[:, :3] -= center
             c[:, :3]  = c[:, :3] - np.round(c[:, :3] / self.L) * self.L
-            c[:, :3] *= 0.5
+            c[:, :3] /= self.L
             obs[:n_valid]  = c
             mask[:n_valid] = 1.0
 
@@ -176,13 +194,26 @@ class ConstructEnv:
         self.pos.append(pos_new)
         self.rad.append(r_new)
         self.n += 1
+        new_idx = self.n - 1
+
+        # 更新接触对（向量化）
+        if new_idx > 0:
+            prev_pos  = np.array(self.pos[:new_idx], dtype=np.float64)
+            prev_rads = np.array(self.rad[:new_idx],  dtype=np.float64)
+            new_p     = np.array(self.pos[new_idx],   dtype=np.float64)
+            diffs = prev_pos - new_p
+            diffs -= np.round(diffs / self.L) * self.L
+            dists = np.linalg.norm(diffs, axis=1)
+            touching = dists < (prev_rads + r_new) * (1 + self.cfg.collision_tol)
+            for m in np.where(touching)[0]:
+                self.contact_pairs.add((int(m), new_idx))
 
         n_before_filter = len(self._candidate_set)
         self._filter_candidates(pos_new, r_new)
         n_filtered = n_before_filter - len(self._candidate_set)
 
         n_before_add = len(self._candidate_set)
-        self._add_new_triplets(self.n - 1)
+        self._add_new_triplets(new_idx)
         n_added = len(self._candidate_set) - n_before_add
 
         self._last_cand_stats = {

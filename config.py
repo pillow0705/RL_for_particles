@@ -7,32 +7,32 @@ class Config:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ---- 物理 / 环境参数 ----
-    target_N       = 100
+    target_N       = 2000
     target_phi     = 0.72
     diameters      = np.arange(0.7, 1.40, 0.05)
-    max_candidates = 1000
+    max_candidates = 2000
     collision_tol  = 0.05
     edge_tol       = 0.05   # 评测时计算配位数用
-    max_particles  = 200
+    max_particles  = 3000
 
     # ---- 候选点编码器 (MLP) ----
     candidate_input_dim  = 5
-    candidate_mlp_layers = [32, 64, 128]
+    candidate_mlp_layers = [64, 128, 256]
 
     # ---- 粒子 Transformer 编码器 ----
-    embed_dim            = 128   # 输出嵌入维度（与候选点编码器对齐，用于点积）
-    transformer_d_model  = 128   # Transformer 内部宽度
-    transformer_nhead    = 4     # 注意力头数
-    transformer_layers   = 3     # Encoder 层数
-    transformer_ffn_dim  = 256   # FFN 隐层宽度
+    embed_dim            = 256   # 输出嵌入维度（与候选点编码器对齐，用于点积）
+    transformer_d_model  = 256   # Transformer 内部宽度
+    transformer_nhead    = 8     # 注意力头数
+    transformer_layers   = 4     # Encoder 层数
+    transformer_ffn_dim  = 512   # FFN 隐层宽度
 
     # ---- 训练超参数 ----
-    num_workers      = 8
-    num_iterations   = 25
+    num_workers      = 16
+    num_iterations   = 50
     samples_per_iter = 50
     train_epochs     = 2
-    advantage_filter_ratio = 0.25   # 丢弃 |advantage| 最小的 30%，保留两端信号
-    batch_size       = 128
+    advantage_filter_ratio = 0.95   # 丢弃 |advantage| 最小的 95%，只保留最强信号
+    batch_size       = 32
     lr               = 5e-4
     gamma            = 0.99
     temperature      = 5.0

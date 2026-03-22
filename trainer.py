@@ -46,7 +46,7 @@ class Trainer:
                 all_samples.append({**step, 'return': G})
 
         if len(all_samples) == 0:
-            return 0.0
+            return 0.0, 0.0
 
         all_returns = np.array([s['return'] for s in all_samples])
         ret_mean    = all_returns.mean()
@@ -67,10 +67,11 @@ class Trainer:
         total_loss = 0.0
         n_updates  = 0
 
+        n_batches = (len(all_samples) + cfg.batch_size - 1) // cfg.batch_size
         for epoch in range(cfg.train_epochs):
             np.random.shuffle(all_samples)
 
-            for start in range(0, len(all_samples), cfg.batch_size):
+            for i, start in enumerate(range(0, len(all_samples), cfg.batch_size)):
                 mb = all_samples[start: start + cfg.batch_size]
                 if len(mb) == 0:
                     continue
@@ -97,5 +98,9 @@ class Trainer:
 
                 total_loss += batch_loss.item()
                 n_updates  += 1
+
+                if (i + 1) % 50 == 0 or (i + 1) == n_batches:
+                    print(f"  [更新] epoch {epoch+1}/{cfg.train_epochs}  "
+                          f"batch {i+1}/{n_batches}  loss={batch_loss.item():.4f}", flush=True)
 
         return total_loss / max(n_updates, 1), adv_var

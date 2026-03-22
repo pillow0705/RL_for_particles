@@ -7,7 +7,7 @@ from physics import get_pbc_center_of_mass
 
 
 class CandidateEncoder(nn.Module):
-    """MLP: 候选点特征 (B, 1000, 5) → (B, 1000, embed_dim)"""
+    """MLP: 候选点特征 (B, max_candidates, 5) → (B, max_candidates, embed_dim)"""
     def __init__(self, cfg: Config):
         super().__init__()
         layers = []
@@ -45,7 +45,7 @@ class ParticleTransformer(nn.Module):
         center = get_pbc_center_of_mass(pos_np, L)
         rel    = pos_np - center
         rel    = rel - np.round(rel / L) * L   # PBC wrap
-        rel    = rel * 0.5                      # 与候选点坐标缩放一致
+        rel    = rel / L                        # 归一化到 [-0.5, 0.5]，与候选点坐标缩放一致
         return np.concatenate(
             [rel, (rad_np / self.r_max).reshape(-1, 1)], axis=1
         ).astype(np.float32)   # (N, 4)
